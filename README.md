@@ -1,36 +1,39 @@
-# webrtc-camera-viewer
+webrtc-camera-viewer
+WebRTC를 이용한 V4L2 카메라의 저지연 원격 스트리밍
 
-Show a live view of a v4l2 camera remotely with low latency using WebRTC.
 
-## Basic overview
+GStreamer가 영상 속성을 설정하고, 하드웨어 인코더를 사용해 H.264로 인코딩한 뒤
+RTP 패킷을 UDP를 통해 로컬호스트(localhost)로 전송합니다.
 
-Gstreamer sets the video properties, encodes to H.264 using the hardware encoder, and sends RTP packets via UDP to localhost.
+Pion WebRTC는 해당 RTP 스트림을 받아 WebRTC 클라이언트로 전달합니다.
 
-Pion WebRTC consumes the RTP stream and sends it to a WebRTC client.
+웹페이지는 WebRTC 클라이언트를 실행하여 카메라의 실시간 영상을 보여줍니다.
 
-The webpage runs the WebRTC client and shows the live view of the camera.
+테스트된 플랫폼
 
-## Tested platform
+하드웨어: Radxa CM5 8GB RAM & 64GB EMMC
 
-Hardware: Radxa Zero 3W (RK3566)\
-System Image: Debian Bullseye (officially supported by Radxa)\
-Camera: Radxa Camera 8M 219
+시스템 이미지: Debian Bullseye (Radxa에서 공식 지원)
 
-## Usage
+카메라: Radxa Camera 4K
 
-1. Build the WebRTC streamer binary
+사용 방법
+WebRTC 스트리머 바이너리 빌드
 
-    ```sh
-    go mod init webrtc-streamer
-    go mod tidy
-    go build
-    ```
 
-2. Start the streaming server
+##대부분 보드들은 제품에 관련 라이브러리가 설치 되있으나 GO는 버전 1.23으로 설치 필요 
+ 1.23이하일경우 에러 생김
 
-    ```sh
-    ./webrtc-streamer
-    ```
+go mod init webrtc-streamer
+go mod tidy
+go build
+스트리밍 서버 실행
 
-3. On a separate device connected to the same network, open the webpage at `http://<Board IP Address>:8080/`
-4. Click the "View Camera" button
+
+./webrtc-streamer
+같은 네트워크에 연결된 다른 기기에서 웹페이지 접속
+
+http://<보드 IP 주소>:8080/ ## 포트 번호는 암거나 해도 상관없다. 
+"View Camera" 버튼 클릭
+
+
