@@ -57,14 +57,16 @@ window.addEventListener('load', function() {
   setTimeout(function() {
     // 로딩 오디오 정지
     const loadingAudio = document.getElementById('loadingAudio');
-    loadingAudio.pause();
-    loadingAudio.currentTime = 0;
+    if (loadingAudio) {
+      loadingAudio.pause();
+      loadingAudio.currentTime = 0;
+    }
     
     document.getElementById('loadingScreen').classList.add('hidden');
     document.getElementById('main-content').classList.add('show');
     // 메인 콘텐츠에 포커스 설정 (스크린 리더 사용자를 위해)
     document.getElementById('main-content').focus();
-  }, 4000); // GIF 재생 시간에 맞춰 조정
+  }, 8000); // 8초 동안 GIF와 오디오 재생
 });
 
 // 접근성 기능 초기화
@@ -440,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Show navigation after loading screen
   setTimeout(function() {
     document.getElementById('mainNav').classList.remove('hidden');
-  }, 8000);
+  }, 8000); // 8초 후 네비게이션 표시
   
   // Navigation toggle for mobile
   const navToggle = document.getElementById('navToggle');
