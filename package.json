@@ -1,0 +1,14 @@
+{
+  "name": "project",
+  "version": "1.0.0",
+  "description": "webrtc-camera-viewer WebRTC를 이용한 V4L2 카메라의 저지연 원격 스트리밍",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite serve static --port 3000",
+    "build": "vite build static"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

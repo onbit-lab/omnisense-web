@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OMNISENSE Icon Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
+        .icon-preview { display: inline-block; margin: 10px; text-align: center; }
+        .icon { background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%); 
+                color: white; display: flex; align-items: center; justify-content: center; 
+                font-weight: bold; border-radius: 20%; margin-bottom: 5px; }
+        .download-btn { background: #00d4ff; color: white; border: none; 
+                       padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>OMNISENSE PWA Icons Generator</h1>
+    <p>이 페이지는 PWA 아이콘을 생성하는 도구입니다. 각 아이콘을 우클릭하여 저장하세요.</p>
+    
+    <div id="icons-container"></div>
+    
+    <script>
+        const sizes = [16, 32, 72, 96, 128, 144, 152, 192, 384, 512];
+        const container = document.getElementById('icons-container');
+        
+        sizes.forEach(size => {
+            const preview = document.createElement('div');
+            preview.className = 'icon-preview';
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            canvas.className = 'icon';
+            canvas.style.width = Math.min(size, 100) + 'px';
+            canvas.style.height = Math.min(size, 100) + 'px';
+            
+            const ctx = canvas.getContext('2d');
+            
+            // 그라디언트 배경
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#00d4ff');
+            gradient.addColorStop(1, '#0099cc');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // 둥근 모서리
+            ctx.globalCompositeOperation = 'destination-in';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, size * 0.2);
+            ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+            
+            // 텍스트
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size * 0.3}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('OS', size/2, size/2);
+            
+            const label = document.createElement('div');
+            label.textContent = `${size}x${size}`;
+            
+            const downloadBtn = document.createElement('button');
+            downloadBtn.textContent = 'Download';
+            downloadBtn.className = 'download-btn';
+            downloadBtn.onclick = () => {
+                const link = document.createElement('a');
+                link.download = `icon-${size}x${size}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            };
+            
+            preview.appendChild(canvas);
+            preview.appendChild(label);
+            preview.appendChild(downloadBtn);
+            container.appendChild(preview);
+        });
+    </script>
+</body>
+</html>
