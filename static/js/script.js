@@ -440,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Show navigation after loading screen
   setTimeout(function() {
     document.getElementById('mainNav').classList.remove('hidden');
-  }, 4000);
+  }, 8000);
   
   // Navigation toggle for mobile
   const navToggle = document.getElementById('navToggle');
