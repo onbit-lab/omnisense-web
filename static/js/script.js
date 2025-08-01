@@ -437,8 +437,78 @@ function showInstallButton() {
 // 스트리밍 상태 관리
 let isStreaming = false;
 
+// PeerConnection 초기화 함수
+function initializePeerConnection() {
+  const newPc = new RTCPeerConnection({
+    iceServers: [
+      {
+        urls: 'stun:stun.l.google.com:19302'
+      }
+    ]
+  });
+
+  newPc.ontrack = function (event) {
+    var el = document.createElement(event.track.kind);
+    el.srcObject = event.streams[0];
+    el.autoplay = true;
+    el.controls = false;
+
+    // 비디오 placeholder 제거하고 영상 추가
+    const videoPlayer = document.getElementById('remoteVideo');
+    videoPlayer.innerHTML = '';
+    videoPlayer.appendChild(el);
+    
+    log('Video stream connected successfully');
+    updateStreamStatus('스트리밍이 연결되었습니다');
+  };
+
+  newPc.oniceconnectionstatechange = e => {
+    log(`Connection state: ${newPc.iceConnectionState}`);
+    
+    const btn = document.getElementById('viewCamera');
+    const btnText = btn.querySelector('.btn-text');
+    const btnIcon = btn.querySelector('.btn-icon');
+    
+    if (newPc.iceConnectionState === 'connected') {
+      isStreaming = true;
+      btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 중지' : 'Stop Stream';
+      btnIcon.innerHTML = '<i class="fas fa-stop"></i>';
+      btn.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
+      btn.setAttribute('aria-label', '스트리밍 중지');
+      updateStreamStatus('스트리밍이 활성화되었습니다');
+    } else if (newPc.iceConnectionState === 'disconnected' || newPc.iceConnectionState === 'failed' || newPc.iceConnectionState === 'closed') {
+      isStreaming = false;
+      btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 시작' : 'Start Stream';
+      btnIcon.innerHTML = '<i class="fas fa-play"></i>';
+      btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
+      btn.setAttribute('aria-label', '스트리밍 시작');
+      updateStreamStatus('스트리밍이 비활성화되었습니다');
+      
+      // 스트리밍 중지 시 비디오 플레이어를 초기 상태로 되돌림
+      const videoPlayer = document.getElementById('remoteVideo');
+      videoPlayer.innerHTML = '<div class="video-placeholder"><p data-translate="Click &quot;Start Stream&quot; to begin live broadcast">Click "Start Stream" to begin live broadcast</p></div>';
+      
+      // 언어 설정에 따라 placeholder 텍스트 업데이트
+      const placeholderTextElement = videoPlayer.querySelector('.video-placeholder p');
+      if (placeholderTextElement) {
+        const currentLang = getCurrentLanguage();
+        placeholderTextElement.textContent = translations[currentLang]['Click "Start Stream" to begin live broadcast'];
+      }
+    }
+  };
+
+  // Offer to receive 1 video track
+  newPc.addTransceiver('video', {'direction': 'recvonly'});
+  newPc.createOffer().then(d => newPc.setLocalDescription(d)).catch(log);
+
+  return newPc;
+}
+
 // Navigation functionality
 document.addEventListener('DOMContentLoaded', function() {
+  // PeerConnection 초기화
+  pc = initializePeerConnection();
+  
   // Show navigation after loading screen
   setTimeout(function() {
     document.getElementById('mainNav').classList.remove('hidden');
@@ -579,14 +649,10 @@ function getShortQualityText(quality) {
   
   return shortQualityMap[quality] || 'HD';
 }
-// 원래 WebRTC 코드
-let pc = new RTCPeerConnection({
-  iceServers: [
-    {
-      urls: 'stun:stun.l.google.com:19302'
-    }
-  ]
-})
+
+// 전역 변수 선언
+let pc;
+
 let log = msg => {
   const timestamp = new Date().toLocaleTimeString();
   document.getElementById('logs').innerHTML += `[${timestamp}] ${msg}<br>`;
@@ -598,63 +664,19 @@ let log = msg => {
   logsElement.scrollTop = logsElement.scrollHeight;
 }
 
-pc.ontrack = function (event) {
-  var el = document.createElement(event.track.kind)
-  el.srcObject = event.streams[0]
-  el.autoplay = true
-  el.controls = false
-
-  // 비디오 placeholder 제거
-  const videoPlayer = document.getElementById('remoteVideo');
-  videoPlayer.innerHTML = '';
-  document.getElementById('remoteVideo').appendChild(el)
-  
-  log('Video stream connected successfully');
-  
-  // 스트리밍 상태 업데이트
-  updateStreamStatus('스트리밍이 연결되었습니다');
-}
-
-pc.oniceconnectionstatechange = e => {
-  log(`Connection state: ${pc.iceConnectionState}`);
-  
-  // 버튼 상태 업데이트
-  const btn = document.getElementById('viewCamera');
-  const btnText = btn.querySelector('.btn-text');
-  const btnIcon = btn.querySelector('.btn-icon');
-    btnIcon.innerHTML = '<i class="fas fa-stop"></i>';
-  if (pc.iceConnectionState === 'connected') {
-    isStreaming = true;
-    btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 중지' : 'Stop Stream';
-    btnIcon.innerHTML = '<i class="fas fa-stop"></i>';
-    btn.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
-    btn.setAttribute('aria-label', '스트리밍 중지');
-    updateStreamStatus('스트리밍이 활성화되었습니다');
-  } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-    isStreaming = false;
-    btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 시작' : 'Start Stream';
-    btnIcon.innerHTML = '<i class="fas fa-play"></i>';
-    btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
-    btn.setAttribute('aria-label', '스트리밍 시작');
-    updateStreamStatus('스트리밍이 비활성화되었습니다');
-  }
-}
-
 function updateStreamStatus(message) {
   const statusElement = document.getElementById('stream-status');
   statusElement.textContent = message;
 }
 
-// Offer to receive 1 video track
-pc.addTransceiver('video', {'direction': 'recvonly'})
-pc.createOffer().then(d => pc.setLocalDescription(d)).catch(log)
-
 document.getElementById('viewCamera').addEventListener('click', function() {
   if (isStreaming) {
-    // 스트리밍 중지 로직 (실제로는 페이지 새로고침으로 연결 종료)
+    // 스트리밍 중지 로직
     log('Stopping streaming...');
-    btnIcon.innerHTML = '<i class="fas fa-play"></i>';
-    location.reload();
+    // 기존 연결 종료
+    pc.close();
+    // pc 객체를 새롭게 초기화하여 다음 스트리밍을 준비
+    pc = initializePeerConnection();
     return;
   }
   
@@ -663,6 +685,7 @@ document.getElementById('viewCamera').addEventListener('click', function() {
   
   fetch('/post', {
       method: 'POST',
+      // 현재 pc.localDescription을 사용
       body: btoa(JSON.stringify(pc.localDescription))
   })
   .then(response => response.text())
