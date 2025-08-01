@@ -509,7 +509,54 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
+  
+  // Video Quality 설정 초기화 및 이벤트 리스너
+  initVideoQualitySettings();
 });
+
+// 비디오 품질 설정 관리
+function initVideoQualitySettings() {
+  const videoQualitySelect = document.getElementById('videoQuality');
+  const streamQualityDisplay = document.querySelector('.stream-quality');
+  
+  // 저장된 설정 로드
+  const savedQuality = localStorage.getItem('videoQuality') || 'hd';
+  videoQualitySelect.value = savedQuality;
+  updateQualityDisplay(savedQuality);
+  
+  // 품질 변경 이벤트 리스너
+  videoQualitySelect.addEventListener('change', function() {
+    const selectedQuality = this.value;
+    updateQualityDisplay(selectedQuality);
+    localStorage.setItem('videoQuality', selectedQuality);
+    
+    // 스크린 리더에 변경 알림
+    const qualityText = getQualityDisplayText(selectedQuality);
+    announceToScreenReader(`비디오 품질이 ${qualityText}로 변경되었습니다.`);
+    
+    log(`Video quality changed to: ${qualityText}`);
+  });
+}
+
+function updateQualityDisplay(quality) {
+  const streamQualityDisplay = document.querySelector('.stream-quality');
+  const qualityText = getQualityDisplayText(quality);
+  
+  if (streamQualityDisplay) {
+    streamQualityDisplay.textContent = qualityText;
+    streamQualityDisplay.setAttribute('data-translate', qualityText);
+  }
+}
+
+function getQualityDisplayText(quality) {
+  const qualityMap = {
+    'hd': 'HD 1280x960',
+    'fhd': 'FHD 1920x1080',
+    '4k': '4K 3840x2160'
+  };
+  
+  return qualityMap[quality] || 'HD 1280x960';
+}
 
 // 원래 WebRTC 코드
 let pc = new RTCPeerConnection({

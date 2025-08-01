@@ -745,6 +745,13 @@ body {
     font-size: 12px;
     color: #00d4ff;
     border: 1px solid rgba(0, 212, 255, 0.3);
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.video-overlay:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: scale(1.05);
 }
 
 /* Video element styling */
