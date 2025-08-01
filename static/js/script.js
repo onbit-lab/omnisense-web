@@ -536,6 +536,10 @@ function initVideoQualitySettings() {
     
     log(`Video quality changed to: ${qualityText}`);
   });
+  
+  // 페이지 로드 시 초기 화질 설정 적용
+  const initialQuality = localStorage.getItem('videoQuality') || 'hd';
+  updateQualityDisplay(initialQuality);
 }
 
 function updateQualityDisplay(quality) {
@@ -545,6 +549,13 @@ function updateQualityDisplay(quality) {
   if (streamQualityDisplay) {
     streamQualityDisplay.textContent = qualityText;
     streamQualityDisplay.setAttribute('data-translate', qualityText);
+  }
+  
+  // 스트림 통계의 Quality 값도 업데이트
+  const statQualityValue = document.querySelector('.stat-item .stat-value');
+  if (statQualityValue && statQualityValue.textContent === 'HD') {
+    const shortQuality = getShortQualityText(quality);
+    statQualityValue.textContent = shortQuality;
   }
 }
 
@@ -558,6 +569,15 @@ function getQualityDisplayText(quality) {
   return qualityMap[quality] || 'HD 1280x960';
 }
 
+function getShortQualityText(quality) {
+  const shortQualityMap = {
+    'hd': 'HD',
+    'fhd': 'FHD', 
+    '4k': '4K'
+  };
+  
+  return shortQualityMap[quality] || 'HD';
+}
 // 원래 WebRTC 코드
 let pc = new RTCPeerConnection({
   iceServers: [
