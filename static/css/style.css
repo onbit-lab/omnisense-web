@@ -378,6 +378,15 @@ body {
     font-size: 1.5rem;
     font-weight: 700;
     color: #00d4ff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-logo {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
 }
 
 .nav-menu {
