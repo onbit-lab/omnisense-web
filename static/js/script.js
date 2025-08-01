@@ -655,3 +655,35 @@ document.getElementById('viewCamera').addEventListener('click', function() {
     console.error('Error:', error);
   });
 });
+
+// Stream Console 토글 기능
+function toggleLogs() {
+  const logsContent = document.getElementById('logs');
+  const logsHeader = document.querySelector('.logs-header');
+  const logsArrow = document.querySelector('.logs-arrow');
+  
+  const isCollapsed = logsContent.classList.contains('collapsed');
+  
+  if (isCollapsed) {
+    // 펼치기
+    logsContent.classList.remove('collapsed');
+    logsArrow.classList.remove('collapsed');
+    logsArrow.textContent = '▼';
+    logsHeader.setAttribute('aria-expanded', 'true');
+    announceToScreenReader('스트림 콘솔이 펼쳐졌습니다');
+  } else {
+    // 접기
+    logsContent.classList.add('collapsed');
+    logsArrow.classList.add('collapsed');
+    logsArrow.textContent = '▶';
+    logsHeader.setAttribute('aria-expanded', 'false');
+    announceToScreenReader('스트림 콘솔이 접혔습니다');
+  }
+}
+
+// 키보드 접근성 지원
+document.querySelector('.logs-header').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    toggleLogs();
+  }

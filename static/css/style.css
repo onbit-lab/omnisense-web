@@ -833,6 +833,13 @@ body {
     padding: 15px 20px;
     background: rgba(255, 255, 255, 0.05);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.logs-header:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .logs-header h3 {
@@ -841,6 +848,22 @@ body {
     color: #00d4ff;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+.logs-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logs-arrow {
+    font-size: 12px;
+    color: #00d4ff;
+    transition: transform 0.3s ease;
+}
+
+.logs-arrow.collapsed {
+    transform: rotate(-90deg);
 }
 
 .console-indicator {
@@ -852,14 +875,21 @@ body {
 }
 
 .logs-content {
+    max-height: 200px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
     padding: 15px 20px;
     font-family: 'Courier New', monospace;
     font-size: 13px;
     line-height: 1.6;
     color: #00ff00;
-    max-height: 200px;
     overflow-y: auto;
     background: rgba(0, 0, 0, 0.5);
+}
+
+.logs-content.collapsed {
+    max-height: 0;
+    padding: 0 20px;
 }
 
 .logs-content:empty::before {

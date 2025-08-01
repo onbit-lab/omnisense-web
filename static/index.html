@@ -171,9 +171,12 @@
 
                 <!-- Logs Section -->
                 <div class="logs-section" role="log" aria-label="스트림 로그">
-                    <div class="logs-header">
+                    <div class="logs-header" onclick="toggleLogs()" role="button" tabindex="0" aria-expanded="true" aria-controls="logs">
                         <h3 data-translate="Stream Console">Stream Console</h3>
-                        <div class="console-indicator"></div>
+                        <div class="logs-toggle">
+                            <div class="console-indicator"></div>
+                            <span class="logs-arrow">▼</span>
+                        </div>
                     </div>
                     <div id="logs" class="logs-content"></div>
                 </div>
