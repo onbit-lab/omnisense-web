@@ -1,6 +1,6 @@
 
 # 1. Go 빌드 환경 사용
-FROM golang:1.22
+FROM golang:1.23
 
 # 2. 작업 디렉토리 설정
 WORKDIR /app
