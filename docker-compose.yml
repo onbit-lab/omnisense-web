@@ -1,0 +1,9 @@
+version: "3.8"
+
+services:
+  omnisense:
+    build: .
+    container_name: omnisense
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
