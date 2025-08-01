@@ -622,18 +622,18 @@ pc.oniceconnectionstatechange = e => {
   const btn = document.getElementById('viewCamera');
   const btnText = btn.querySelector('.btn-text');
   const btnIcon = btn.querySelector('.btn-icon');
-  
+    btnIcon.innerHTML = '<i class="fas fa-stop"></i>';
   if (pc.iceConnectionState === 'connected') {
     isStreaming = true;
     btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 중지' : 'Stop Stream';
-    btnIcon.textContent = '⏹';
+    btnIcon.innerHTML = '<i class="fas fa-stop"></i>';
     btn.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
     btn.setAttribute('aria-label', '스트리밍 중지');
     updateStreamStatus('스트리밍이 활성화되었습니다');
   } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
     isStreaming = false;
     btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 시작' : 'Start Stream';
-    btnIcon.textContent = '▶';
+    btnIcon.innerHTML = '<i class="fas fa-play"></i>';
     btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
     btn.setAttribute('aria-label', '스트리밍 시작');
     updateStreamStatus('스트리밍이 비활성화되었습니다');
@@ -653,7 +653,7 @@ document.getElementById('viewCamera').addEventListener('click', function() {
   if (isStreaming) {
     // 스트리밍 중지 로직 (실제로는 페이지 새로고침으로 연결 종료)
     log('Stopping streaming...');
-    announceToScreenReader('스트리밍을 중지합니다');
+    btnIcon.innerHTML = '<i class="fas fa-play"></i>';
     location.reload();
     return;
   }

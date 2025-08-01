@@ -411,6 +411,21 @@ body {
     font-size: 16px;
 }
 
+/* Font Awesome 아이콘 스타일 */
+.nav-icon .fas,
+.status-icon .fas,
+.accessibility-icon .fas,
+.btn-icon .fas {
+    font-size: 1em;
+    color: inherit;
+    vertical-align: middle;
+}
+
+/* 상태 아이콘 특별 스타일 */
+.status-icon .fas {
+    font-size: 2rem;
+}
+
 .nav-toggle {
     display: none;
     flex-direction: column;

@@ -20,6 +20,9 @@
     <!-- Manifest -->
     <link rel="manifest" href="/manifest.json">
     
+    <!-- Font Awesome CDN for SVG + JS icons -->
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    
     <!-- Apple Touch Icons -->
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png">
@@ -66,10 +69,10 @@
                     <label class="setting-label">언어 / Language</label>
                     <div class="language-selector">
                         <button class="language-btn active" data-lang="ko" aria-label="한국어 선택">
-                            🇰🇷 한국어
+                            <i class="fas fa-flag" style="color: #cd2e3a;"></i> 한국어
                         </button>
                         <button class="language-btn" data-lang="en" aria-label="Select English">
-                            🇺🇸 English
+                            <i class="fas fa-flag" style="color: #b22234;"></i> English
                         </button>
                     </div>
                 </div>
@@ -95,24 +98,24 @@
             <div class="nav-brand">
                 <img src="hideflogo.png" alt="OMNISENSE" class="brand-logo">
                 <button id="accessibilityToggle" class="accessibility-toggle" aria-label="접근성 설정 열기" title="접근성 설정">
-                    <span class="accessibility-icon">⚙️</span>
+                    <span class="accessibility-icon"><i class="fas fa-cog"></i></span>
                 </button>
             </div>
             <div class="nav-menu" id="navMenu" role="menubar">
                 <a href="#stream" class="nav-link active" data-section="stream" role="menuitem" aria-current="page" data-translate="Stream">
-                    <span class="nav-icon">📹</span>
+                    <span class="nav-icon"><i class="fas fa-video"></i></span>
                     <span class="nav-text" data-translate="Streaming">Streaming</span>
                 </a>
                 <a href="#settings" class="nav-link" data-section="settings" role="menuitem" data-translate="Settings">
-                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-icon"><i class="fas fa-cog"></i></span>
                     <span class="nav-text" data-translate="Settings">Settings</span>
                 </a>
                 <a href="#status" class="nav-link" data-section="status" role="menuitem" data-translate="Status">
-                    <span class="nav-icon">📊</span>
+                    <span class="nav-icon"><i class="fas fa-chart-bar"></i></span>
                     <span class="nav-text" data-translate="Status">Status</span>
                 </a>
                 <a href="#help" class="nav-link" data-section="help" role="menuitem" data-translate="Help">
-                    <span class="nav-icon">❓</span>
+                    <span class="nav-icon"><i class="fas fa-question-circle"></i></span>
                     <span class="nav-text" data-translate="Help">Help</span>
                 </a>
             </div>
@@ -153,7 +156,7 @@
                 <!-- Controls -->
                 <div class="control-section">
                     <button id="viewCamera" class="stream-btn" aria-describedby="stream-status">
-                        <span class="btn-icon">▶</span>
+                        <span class="btn-icon"><i class="fas fa-play"></i></span>
                         <span class="btn-text" data-translate="Start Stream">Start Stream</span>
                     </button>
                     <div class="stream-stats">
@@ -223,28 +226,28 @@
                 <h2 id="status-heading" class="section-title" data-translate="Device Status">Device Status</h2>
                 <div class="status-grid" role="list">
                     <div class="status-card" role="listitem">
-                        <div class="status-icon">🔋</div>
+                        <div class="status-icon"><i class="fas fa-battery-full"></i></div>
                         <div class="status-info">
                             <span class="status-label" id="battery-label" data-translate="Battery">Battery</span>
                             <span class="status-value" aria-labelledby="battery-label">85%</span>
                         </div>
                     </div>
                     <div class="status-card" role="listitem">
-                        <div class="status-icon">📶</div>
+                        <div class="status-icon"><i class="fas fa-wifi"></i></div>
                         <div class="status-info">
                             <span class="status-label" id="signal-label" data-translate="Signal">Signal</span>
                             <span class="status-value" aria-labelledby="signal-label" data-translate="Strong">Strong</span>
                         </div>
                     </div>
                     <div class="status-card" role="listitem">
-                        <div class="status-icon">🌡️</div>
+                        <div class="status-icon"><i class="fas fa-thermometer-half"></i></div>
                         <div class="status-info">
                             <span class="status-label" id="temp-label" data-translate="Temperature">Temperature</span>
                             <span class="status-value" aria-labelledby="temp-label">42°C</span>
                         </div>
                     </div>
                     <div class="status-card" role="listitem">
-                        <div class="status-icon">💾</div>
+                        <div class="status-icon"><i class="fas fa-hdd"></i></div>
                         <div class="status-info">
                             <span class="status-label" id="storage-label" data-translate="Storage">Storage</span>
                             <span class="status-value" aria-labelledby="storage-label">12GB Free</span>
