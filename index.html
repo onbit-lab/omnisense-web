@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="RADXA CM5 웨어러블 실시간 스트리밍 디바이스">
+    <meta name="theme-color" content="#00d4ff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OMNISENSE">
+    <meta name="msapplication-TileColor" content="#0a0a0a">
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png">
+    
+    <!-- Accessibility Meta Tags -->
+    <meta name="color-scheme" content="dark light">
+    <meta name="prefers-reduced-motion" content="reduce">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png">
+    
+    <title>OmniSense</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body role="application" aria-label="OMNISENSE 실시간 스트리밍 애플리케이션">
+    <!-- Accessibility preferences panel -->
+    <div id="accessibilityPanel" class="accessibility-panel" role="dialog" aria-labelledby="a11y-title" aria-hidden="true">
+        <div class="accessibility-content">
+            <h2 id="a11y-title" data-translate="접근성 설정">접근성 설정</h2>
+            <div class="accessibility-controls">
+                <div class="control-group">
+                    <label for="fontSize" data-translate="글자 크기">글자 크기</label>
+                    <select id="fontSize" class="accessibility-select">
+                        <option value="normal" data-translate="보통">보통</option>
+                        <option value="large" data-translate="크게">크게</option>
+                        <option value="xlarge" data-translate="매우 크게">매우 크게</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="contrast" data-translate="대비">대비</label>
+                    <select id="contrast" class="accessibility-select">
+                        <option value="normal" data-translate="보통">보통</option>
+                        <option value="high" data-translate="높음">높음</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="reduceMotion"> <span data-translate="애니메이션 줄이기">애니메이션 줄이기</span>
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="screenReader"> <span data-translate="스크린 리더 모드">스크린 리더 모드</span>
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label class="setting-label">언어 / Language</label>
+                    <div class="language-selector">
+                        <button class="language-btn active" data-lang="ko" aria-label="한국어 선택">
+                            🇰🇷 한국어
+                        </button>
+                        <button class="language-btn" data-lang="en" aria-label="Select English">
+                            🇺🇸 English
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <button class="close-accessibility" aria-label="접근성 패널 닫기">닫기</button>
+        </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen" role="status" aria-label="로딩 중">
+        <img src="onbit_lab_razor1911_noflash.gif" alt="Loading..." class="loading-gif">
+        <audio id="loadingAudio" preload="auto" loop>
+            <source src="loading-sound.mp3" type="audio/mpeg">
+            <!-- 브라우저가 MP3를 지원하지 않는 경우를 위한 대체 포맷 -->
+            <source src="loading-sound.ogg" type="audio/ogg">
+            <source src="loading-sound.wav" type="audio/wav">
+        </audio>
+    </div>
+
+    <!-- Navigation -->
+    <nav id="mainNav" class="main-nav hidden" role="navigation" aria-label="주 메뉴">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <img src="hideflogo.png" alt="OMNISENSE" class="brand-logo">
+                <button id="accessibilityToggle" class="accessibility-toggle" aria-label="접근성 설정 열기" title="접근성 설정">
+                    <span class="accessibility-icon">⚙️</span>
+                </button>
+            </div>
+            <div class="nav-menu" id="navMenu" role="menubar">
+                <a href="#stream" class="nav-link active" data-section="stream" role="menuitem" aria-current="page" data-translate="Stream">
+                    <span class="nav-icon">📹</span>
+                    <span class="nav-text" data-translate="Streaming">Streaming</span>
+                </a>
+                <a href="#settings" class="nav-link" data-section="settings" role="menuitem" data-translate="Settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text" data-translate="Settings">Settings</span>
+                </a>
+                <a href="#status" class="nav-link" data-section="status" role="menuitem" data-translate="Status">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text" data-translate="Status">Status</span>
+                </a>
+                <a href="#help" class="nav-link" data-section="help" role="menuitem" data-translate="Help">
+                    <span class="nav-icon">❓</span>
+                    <span class="nav-text" data-translate="Help">Help</span>
+                </a>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="메뉴 토글" aria-expanded="false" aria-controls="navMenu">
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Streaming Interface -->
+    <main id="main-content" class="main-content" tabindex="-1">
+        <!-- Stream Section -->
+        <section id="streamSection" class="content-section active" role="main" aria-labelledby="stream-heading">
+            <div class="streaming-container">
+                <!-- Header -->
+                <header class="stream-header" role="banner">
+                    <div class="logo-section">
+                        <h1 id="stream-heading" class="stream-title" data-translate="OMNISENSE 실시간 스트리밍">OMNISENSE 실시간 스트리밍</h1>
+                    </div>
+                </header>
+
+                <!-- Video Section -->
+                <div class="video-section">
+                    <div class="video-container">
+                        <div id="remoteVideo" class="video-player" role="img" aria-label="실시간 비디오 스트림">
+                            <div class="video-placeholder">
+                                <p data-translate="Click &quot;Start Stream&quot; to begin live broadcast">Click "Start Stream" to begin live broadcast</p>
+                            </div>
+                        </div>
+                        <div class="video-overlay">
+                            <div class="stream-quality">HD 1280x960</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="control-section">
+                    <button id="viewCamera" class="stream-btn" aria-describedby="stream-status">
+                        <span class="btn-icon">▶</span>
+                        <span class="btn-text" data-translate="Start Stream">Start Stream</span>
+                    </button>
+                    <div class="stream-stats">
+                        <div class="stat-item">
+                            <span class="stat-label" data-translate="Viewers">Viewers</span>
+                            <span class="stat-value">1</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label" data-translate="Quality">Quality</span>
+                            <span class="stat-value quality-stat">HD</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="stream-status" class="sr-only" aria-live="polite"></div>
+
+                <!-- Logs Section -->
+                <div class="logs-section" role="log" aria-label="스트림 로그">
+                    <div class="logs-header" onclick="toggleLogs()" role="button" tabindex="0" aria-expanded="true" aria-controls="logs">
+                        <h3 data-translate="Stream Console">Stream Console</h3>
+                        <div class="logs-toggle">
+                            <div class="console-indicator"></div>
+                            <span class="logs-arrow">▼</span>
+                        </div>
+                    </div>
+                    <div id="logs" class="logs-content"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="settingsSection" class="content-section" role="region" aria-labelledby="settings-heading">
+            <div class="settings-container">
+                <h2 id="settings-heading" class="section-title" data-translate="Stream Settings">Stream Settings</h2>
+                <div class="settings-grid">
+                    <div class="setting-group">
+                        <label class="setting-label" for="videoQuality" data-translate="Video Quality">Video Quality</label>
+                        <select class="setting-select" id="videoQuality" aria-describedby="quality-help">
+                            <option value="hd" data-translate="HD (1280x960)">HD (1280x960)</option>
+                            <option value="fhd" data-translate="FHD (1920x1080)">FHD (1920x1080)</option>
+                            <option value="4k" data-translate="4K (3840x2160)">4K (3840x2160)</option>
+                        </select>
+                        <div id="quality-help" class="setting-help" data-translate="높은 화질은 더 많은 대역폭을 사용합니다">높은 화질은 더 많은 대역폭을 사용합니다</div>
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-label" for="frameRate" data-translate="Frame Rate">Frame Rate</label>
+                        <select class="setting-select" id="frameRate" aria-describedby="framerate-help">
+                            <option value="30" data-translate="30 FPS">30 FPS</option>
+                            <option value="60" data-translate="60 FPS">60 FPS</option>
+                        </select>
+                        <div id="framerate-help" class="setting-help" data-translate="높은 프레임율은 더 부드러운 영상을 제공합니다">높은 프레임율은 더 부드러운 영상을 제공합니다</div>
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-label" for="audioToggle" data-translate="Audio">Audio</label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="audioToggle" checked aria-describedby="audio-help">
+                            <label for="audioToggle" class="toggle-label" aria-label="오디오 켜기/끄기"></label>
+                        </div>
+                        <div id="audio-help" class="setting-help" data-translate="오디오 스트리밍을 활성화/비활성화합니다">오디오 스트리밍을 활성화/비활성화합니다</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Status Section -->
+        <section id="statusSection" class="content-section" role="region" aria-labelledby="status-heading">
+            <div class="status-container">
+                <h2 id="status-heading" class="section-title" data-translate="Device Status">Device Status</h2>
+                <div class="status-grid" role="list">
+                    <div class="status-card" role="listitem">
+                        <div class="status-icon">🔋</div>
+                        <div class="status-info">
+                            <span class="status-label" id="battery-label" data-translate="Battery">Battery</span>
+                            <span class="status-value" aria-labelledby="battery-label">85%</span>
+                        </div>
+                    </div>
+                    <div class="status-card" role="listitem">
+                        <div class="status-icon">📶</div>
+                        <div class="status-info">
+                            <span class="status-label" id="signal-label" data-translate="Signal">Signal</span>
+                            <span class="status-value" aria-labelledby="signal-label" data-translate="Strong">Strong</span>
+                        </div>
+                    </div>
+                    <div class="status-card" role="listitem">
+                        <div class="status-icon">🌡️</div>
+                        <div class="status-info">
+                            <span class="status-label" id="temp-label" data-translate="Temperature">Temperature</span>
+                            <span class="status-value" aria-labelledby="temp-label">42°C</span>
+                        </div>
+                    </div>
+                    <div class="status-card" role="listitem">
+                        <div class="status-icon">💾</div>
+                        <div class="status-info">
+                            <span class="status-label" id="storage-label" data-translate="Storage">Storage</span>
+                            <span class="status-value" aria-labelledby="storage-label">12GB Free</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Help Section -->
+        <section id="helpSection" class="content-section" role="region" aria-labelledby="help-heading">
+            <div class="help-container">
+                <h2 id="help-heading" class="section-title" data-translate="Help & Support">Help & Support</h2>
+                <div class="help-content">
+                    <div class="help-item">
+                        <h3 data-translate="Quick Start">Quick Start</h3>
+                        <p data-translate='Click "Start Stream" to begin broadcasting. The wearable camera will automatically connect and start streaming.'>"스트림 시작"을 클릭하여 방송을 시작하세요. 웨어러블 카메라가 자동으로 연결되어 스트리밍을 시작합니다.</p>
+                    </div>
+                    <div class="help-item">
+                        <h3 data-translate="Troubleshooting">Troubleshooting</h3>
+                        <ul>
+                            <li data-translate="Check camera connection">카메라 연결 확인</li>
+                            <li data-translate="Verify network connectivity">네트워크 연결 확인</li>
+                            <li data-translate="Restart device if needed">필요시 디바이스 재시작</li>
+                        </ul>
+                    </div>
+                    <div class="help-item">
+                        <h3 data-translate="Device Info">Device Info</h3>
+                        <p data-translate="RADXA CM5 Wearable Streaming Device">RADXA CM5 웨어러블 스트리밍 디바이스<br>
+                        <span data-translate="Firmware: v1.0.0">펌웨어: v1.0.0</span><br>
+                        <span data-translate="WebRTC Enabled">WebRTC 지원</span></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
