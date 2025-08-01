@@ -552,10 +552,11 @@ function updateQualityDisplay(quality) {
   }
   
   // 스트림 통계의 Quality 값도 업데이트
-  const statQualityValue = document.querySelector('.stat-item .stat-value');
-  if (statQualityValue && statQualityValue.textContent === 'HD') {
+  const statQualityValue = document.querySelector('.quality-stat');
+  if (statQualityValue) {
     const shortQuality = getShortQualityText(quality);
     statQualityValue.textContent = shortQuality;
+    statQualityValue.setAttribute('data-translate', shortQuality);
   }
 }
 
