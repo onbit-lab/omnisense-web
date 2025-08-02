@@ -3,5 +3,5 @@ services:
   omnisense:
     build: .
     container_name: omnisense
-    network_mode: host        # ★ 도커 NAT 우회
+    network_mode: host        
     restart: unless-stopped
