@@ -1,12 +1,9 @@
+version: "3.8"
+
 services:
   omnisense:
     build: .
+    container_name: omnisense
     ports:
-      - "8081:8080"       # Web UI
-      - "5004:5004/udp"   # RTP 입력
-    environment:
-      - HTTP_ADDR=:8080
-      - UDP_HOST=0.0.0.0
-      - UDP_PORT=5004
-      - GST_MODE=external   # ← Radxa에서 RTP를 보낼 때
+      - "8080:8080"
     restart: unless-stopped
