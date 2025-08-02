@@ -6,4 +6,5 @@ services:
     container_name: omnisense
     ports:
       - "8080:8080"
+      - "5004:5004/udp" 
     restart: unless-stopped
