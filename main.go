@@ -206,22 +206,24 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 }
 
 func initUDPListener() *net.UDPConn {
-	// Open a UDP Listener for RTP Packets on port 5004
-	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5004})
-	if err != nil {
-		panic(err)
-	}
+    // 모든 인터페이스에서 UDP 5004 수신
+    addr := &net.UDPAddr{
+        IP:   net.ParseIP("0.0.0.0"),
+        Port: 5004,
+    }
 
-	// Increase the UDP receive buffer size
-	// Default UDP buffer sizes vary on different operating systems
-	bufferSize := 300000 // 300KB
-	err = listener.SetReadBuffer(bufferSize)
-	if err != nil {
-		panic(err)
-	}
+    conn, err := net.ListenUDP("udp", addr)
+    if err != nil {
+        log.Fatalf("failed to bind UDP %s:%d: %v", addr.IP, addr.Port, err)
+    }
 
-	return listener
-}
+    // RTP 스트림 안정화를 위해 리드/라이트 버퍼를 넉넉히 설정 (필요 시 값 조정)
+    if err := conn.SetReadBuffer(4 * 1024 * 1024); err != nil {
+        log.Printf("warn: SetReadBuffer failed: %v", err)
+    }
+    if err := conn.SetWriteBuffer(4 * 1024 * 1024); err != nil {
+        log.Printf("warn: SetWriteBuffer failed: %v", err)
+    }
 
 func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
 	defer func() {
