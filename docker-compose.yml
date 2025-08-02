@@ -1,10 +1,7 @@
 version: "3.8"
-
 services:
   omnisense:
     build: .
     container_name: omnisense
-    ports:
-      - "8080:8080"
-      - "5004:5004/udp" 
+    network_mode: host        # ★ 도커 NAT 우회
     restart: unless-stopped
