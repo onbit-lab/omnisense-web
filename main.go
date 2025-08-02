@@ -217,13 +217,20 @@ func initUDPListener() *net.UDPConn {
         log.Fatalf("failed to bind UDP %s:%d: %v", addr.IP, addr.Port, err)
     }
 
-    // RTP 스트림 안정화를 위해 리드/라이트 버퍼를 넉넉히 설정 (필요 시 값 조정)
+    // RTP 안정화를 위해 버퍼 넉넉히 (필요 시 조정)
     if err := conn.SetReadBuffer(4 * 1024 * 1024); err != nil {
         log.Printf("warn: SetReadBuffer failed: %v", err)
     }
     if err := conn.SetWriteBuffer(4 * 1024 * 1024); err != nil {
         log.Printf("warn: SetWriteBuffer failed: %v", err)
     }
+
+    la := conn.LocalAddr().(*net.UDPAddr)
+    log.Printf("UDP listener ready on %s:%d", la.IP.String(), la.Port)
+
+    return conn
+}
+
 
 func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
 	defer func() {
