@@ -6,4 +6,5 @@ services:
     container_name: omnisense
     ports:
       - "8081:8080"  # 외부 8081 → 내부 8080
+      - "5004:5004/udp"  # RTP 수신
     restart: unless-stopped
