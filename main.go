@@ -4,282 +4,313 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
-	"strings"
+	"strconv"
+	"time"
 
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 )
 
-func main() {
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fs)
+// ---------- helpers ----------
 
-	gstContext, cancelGst := context.WithCancel(context.Background())
-	defer cancelGst()
-	var streamInProgress bool = false
-
-	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
+func getenvStr(k, d string) string {
+	v := os.Getenv(k)
+	if v == "" {
+		return d
+	}
+	return v
+}
+func getenvInt(k string, d int) int {
+	if s := os.Getenv(k); s != "" {
+		if n, err := strconv.Atoi(s); err == nil {
+			return n
 		}
-		if streamInProgress {
-			fmt.Println("Attempted new session while stream in progress")
-			http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "Unable to read request", http.StatusInternalServerError)
-			return
-		}
-		fmt.Println("Received SessionDescription from browser")
-
-		defer r.Body.Close()
-		offer := webrtc.SessionDescription{}
-		decode(string(body), &offer)
-
-		peerConnection, videoTrack, rtpSender := initWebRTCSession(&offer)
-		go readIncomingRTCPPackets(rtpSender)
-		listener := initUDPListener()
-		go sendRtpToClient(videoTrack, listener)
-		gstHandle := runGstreamerPipeline(gstContext)
-		handleICEConnectionState(peerConnection, gstHandle, listener, &streamInProgress)
-		streamInProgress = true
-
-		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
-		fmt.Println("Sent local SessionDescription to browser")
-	})
-
-	fmt.Println("Server starting on :8080...")
-	err := http.ListenAndServe(":8080", nil)
-	log.Fatal("HTTP Server error: ", err)
+	}
+	return d
 }
 
-func initWebRTCSession(offer *webrtc.SessionDescription) (
-	*webrtc.PeerConnection,
-	*webrtc.TrackLocalStaticRTP,
-	*webrtc.RTPSender,
-) {
-	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
+// encode: JSON -> base64 string
+func encode(v any) string {
+	b, _ := json.Marshal(v)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// decode: base64 string -> JSON -> v
+func decode(s string, v any) error {
+	raw, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, v)
+}
+
+// ---------- WebRTC ----------
+
+func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender, error) {
+	api := webrtc.NewAPI()
+
+	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: []string{"stun:stun.l.google.com:19302"},
-			},
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		},
-	})
-	if err != nil {
-		panic(err)
 	}
 
-	// Create a video track
+	pc, err := api.NewPeerConnection(config)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("NewPeerConnection: %w", err)
+	}
+
+	// H.264 트랙 (RTP 그대로 씁니다)
 	videoTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, "video", "pion")
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
+		"video", "pion",
+	)
 	if err != nil {
-		panic(err)
+		_ = pc.Close()
+		return nil, nil, nil, fmt.Errorf("NewTrackLocalStaticRTP: %w", err)
 	}
-	rtpSender, err := peerConnection.AddTrack(videoTrack)
+
+	rtpSender, err := pc.AddTrack(videoTrack)
 	if err != nil {
-		panic(err)
+		_ = pc.Close()
+		return nil, nil, nil, fmt.Errorf("AddTrack: %w", err)
 	}
 
-	// Set the remote SessionDescription
-	if err = peerConnection.SetRemoteDescription(*offer); err != nil {
-		panic(err)
+	// 브라우저의 RTCP 읽기 루프(에러 나면 종료)
+	go readIncomingRTCPPackets(rtpSender)
+
+	// 리모트 SDP 설정
+	if err := pc.SetRemoteDescription(*offer); err != nil {
+		_ = pc.Close()
+		return nil, nil, nil, fmt.Errorf("SetRemoteDescription: %w", err)
 	}
 
-	// Create answer
-	answer, err := peerConnection.CreateAnswer(nil)
+	// Answer 생성/설정
+	answer, err := pc.CreateAnswer(nil)
 	if err != nil {
-		panic(err)
+		_ = pc.Close()
+		return nil, nil, nil, fmt.Errorf("CreateAnswer: %w", err)
+	}
+	if err := pc.SetLocalDescription(answer); err != nil {
+		_ = pc.Close()
+		return nil, nil, nil, fmt.Errorf("SetLocalDescription: %w", err)
 	}
 
-	// Create channel that is blocked until ICE Gathering is complete
-	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+	// ICE 수집 완료 대기 후 반환
+	g := webrtc.GatheringCompletePromise(pc)
+	<-g
 
-	// Sets the LocalDescription, and starts our UDP listeners
-	if err = peerConnection.SetLocalDescription(answer); err != nil {
-		panic(err)
-	}
-
-	// Block until ICE Gathering is complete, disabling trickle ICE
-	// we do this because we only can exchange one signaling message
-	// in a production application you should exchange ICE Candidates via OnICECandidate
-	<-gatherComplete
-
-	fmt.Println("WebRTC session initialized")
-	return peerConnection, videoTrack, rtpSender
+	return pc, videoTrack, rtpSender, nil
 }
 
-func handleICEConnectionState(
-	peerConnection *webrtc.PeerConnection,
-	gstHandle *exec.Cmd,
-	listener *net.UDPConn,
-	streamInProgress *bool,
-) {
-	// Set the handler for ICE connection state
-	// This will notify you when the peer has connected/disconnected
-	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		fmt.Printf("Connection State has changed %s \n", connectionState.String())
+func readIncomingRTCPPackets(sender *webrtc.RTPSender) {
+	buf := make([]byte, 1500)
+	for {
+		if _, _, err := sender.Read(buf); err != nil {
+			return // 연결 종료/에러 시 루프 종료
+		}
+	}
+}
 
-		if connectionState == webrtc.ICEConnectionStateClosed ||
-			connectionState == webrtc.ICEConnectionStateDisconnected ||
-			connectionState == webrtc.ICEConnectionStateFailed {
-			if !*streamInProgress {
-				return
-			}
-			if err := gstHandle.Process.Kill(); err != nil {
-				fmt.Println("Failed to terminate Gstreamer: ", err)
-			} else {
-				fmt.Println("Terminated Gstreamer")
-			}
-			if err := peerConnection.Close(); err != nil {
-				panic(err)
-			}
-			fmt.Println("peerConnection closed")
+// ---------- UDP(RTP) ----------
 
-			if err := listener.Close(); err != nil {
-				if !strings.Contains(err.Error(), "use of closed network connection") {
-					fmt.Println("OnICEConnectionStateChange listener.Close() error:", err)
-				}
-			} else {
-				fmt.Println("UDP listener closed")
+func initUDPListener() *net.UDPConn {
+	bindIP := getenvStr("RTP_BIND_IP", "0.0.0.0")
+	port := getenvInt("RTP_PORT", 5004)
+
+	addr := &net.UDPAddr{
+		IP:   net.ParseIP(bindIP),
+		Port: port,
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatalf("failed to bind UDP %s:%d: %v", bindIP, port, err)
+	}
+
+	// 버퍼 여유
+	if err := conn.SetReadBuffer(4 * 1024 * 1024); err != nil {
+		log.Printf("warn: SetReadBuffer failed: %v", err)
+	}
+	if err := conn.SetWriteBuffer(4 * 1024 * 1024); err != nil {
+		log.Printf("warn: SetWriteBuffer failed: %v", err)
+	}
+
+	la := conn.LocalAddr().(*net.UDPAddr)
+	log.Printf("UDP listener ready on %s:%d", la.IP.String(), la.Port)
+	return conn
+}
+
+func sendRtpToClient(track *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	buf := make([]byte, 2048)
+	var pkt rtp.Packet
+
+	for {
+		n, _, err := listener.ReadFrom(buf)
+		if err != nil {
+			// listener close 등으로 종료됨
+			if !isNetClosedErr(err) {
+				log.Printf("RTP read error: %v", err)
+			}
+			return
+		}
+
+		if err := pkt.Unmarshal(buf[:n]); err != nil {
+			// 가끔 나쁜 패킷이 들어오면 스킵
+			continue
+		}
+
+		if err := track.WriteRTP(&pkt); err != nil {
+			log.Printf("track.WriteRTP error: %v", err)
+			return
+		}
+	}
+}
+
+func isNetClosedErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	// 플랫폼별 메시지가 달라서 문자열 포함 체크
+	es := err.Error()
+	return es == "use of closed network connection" ||
+		es == "EOF" ||
+		es == "file already closed"
+}
+
+// ---------- (옵션) 로컬 GStreamer ----------
+// 기본값으로는 사용하지 않습니다. LOCAL_GST=1 일 때만 시도.
+func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
+	if os.Getenv("LOCAL_GST") != "1" {
+		return nil
+	}
+
+	// ※ 예시: Rockchip 환경(라즈베리에선 보통 실패)
+	// 필요하면 환경 변수 GST_CMD 로 명령을 교체하세요.
+	cmdline := getenvStr("GST_CMD",
+		`gst-launch-1.0 -v `+
+			`v4l2src device=/dev/video0 io-mode=4 ! `+
+			`video/x-raw,width=1280,height=720 ! `+
+			`queue ! mpph264enc profile=baseline header-mode=each-idr ! `+
+			`rtph264pay pt=96 mtu=1200 config-interval=1 ! `+
+			`udpsink host=127.0.0.1 port=`+strconv.Itoa(getenvInt("RTP_PORT", 5004)),
+	)
+
+	cmd := exec.CommandContext(ctx, "bash", "-lc", cmdline)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("failed to start local GStreamer (ignored): %v", err)
+		return nil
+	}
+	log.Printf("local GStreamer started (pid=%d)", cmd.Process.Pid)
+	return cmd
+}
+
+// ---------- ICE 상태 변화 시 정리 ----------
+
+func handleICEConnectionState(pc *webrtc.PeerConnection, gstHandle *exec.Cmd, listener *net.UDPConn, streamInProgress *bool) {
+	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
+		log.Printf("ICE state: %s", s.String())
+
+		switch s {
+		case webrtc.PeerConnectionStateFailed,
+			webrtc.PeerConnectionStateClosed,
+			webrtc.PeerConnectionStateDisconnected:
+			// 자원 반납 (nil-safe)
+			if gstHandle != nil && gstHandle.Process != nil {
+				_ = gstHandle.Process.Kill()
+				log.Printf("terminated local GStreamer")
+			}
+			if listener != nil {
+				_ = listener.Close()
+			}
+			if pc != nil {
+				_ = pc.Close()
 			}
 			*streamInProgress = false
 		}
 	})
 }
 
-// Before these packets are returned they are processed by interceptors. For things
-// like NACK this needs to be called.
-func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender) {
-	rtcpBuf := make([]byte, 1500)
-	for {
-		if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-			// fmt.Println("rtpSender.Read error", rtcpErr)
+// ---------- HTTP server ----------
+
+func main() {
+	// 정적 파일
+	fs := http.FileServer(http.Dir("./static"))
+	http.Handle("/", fs)
+
+	gstContext, cancelGst := context.WithCancel(context.Background())
+	defer cancelGst()
+
+	var streamInProgress bool
+
+	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-	}
-}
-
-func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
-	const (
-		videoWidth  = 1280
-		videoHeight = 960
-		rtpPort     = 5004
-	)
-
-	args := []string{
-		"v4l2src", "device=/dev/video0", "io-mode=4",
-		"!", fmt.Sprintf("video/x-raw,width=%d,height=%d", videoWidth, videoHeight),
-		"!", "queue",
-		"!", "mpph264enc", "profile=baseline", "header-mode=each-idr",
-		"!", "rtph264pay",
-		"!", "udpsink", "host=127.0.0.1",
-		fmt.Sprintf("port=%d", rtpPort),
-	}
-
-	cmd := exec.CommandContext(ctx, "gst-launch-1.0", args...)
-
-	// stderr, _ := cmd.StderrPipe()
-
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Gstreamer running...")
-
-	// scanner := bufio.NewScanner(stderr)
-	// scanner.Split(bufio.ScanWords)
-	// for scanner.Scan() {
-	// 	m := scanner.Text()
-	// 	fmt.Println(m)
-	// }
-	// cmd.Wait()
-
-	return cmd
-}
-
-func initUDPListener() *net.UDPConn {
-    // 모든 인터페이스에서 UDP 5004 수신
-    addr := &net.UDPAddr{
-        IP:   net.ParseIP("0.0.0.0"),
-        Port: 5004,
-    }
-
-    conn, err := net.ListenUDP("udp", addr)
-    if err != nil {
-        log.Fatalf("failed to bind UDP %s:%d: %v", addr.IP, addr.Port, err)
-    }
-
-    // RTP 안정화를 위해 버퍼 넉넉히 (필요 시 조정)
-    if err := conn.SetReadBuffer(4 * 1024 * 1024); err != nil {
-        log.Printf("warn: SetReadBuffer failed: %v", err)
-    }
-    if err := conn.SetWriteBuffer(4 * 1024 * 1024); err != nil {
-        log.Printf("warn: SetWriteBuffer failed: %v", err)
-    }
-
-    la := conn.LocalAddr().(*net.UDPAddr)
-    log.Printf("UDP listener ready on %s:%d", la.IP.String(), la.Port)
-
-    return conn
-}
-
-
-func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
-	defer func() {
-		if err := listener.Close(); err != nil {
-			if !strings.Contains(err.Error(), "use of closed network connection") {
-				fmt.Println("sendRtpToClient listener.Close() error:", err)
-			}
-		} else {
-			fmt.Println("UDP listener closed")
+		if streamInProgress {
+			log.Println("Attempted new session while stream in progress")
+			http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+			return
 		}
-	}()
 
-	// Read RTP packets and send them to the WebRTC Client
-	inboundRTPPacket := make([]byte, 1600) // UDP MTU
-	for {
-		n, _, err := listener.ReadFrom(inboundRTPPacket)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			// fmt.Println("UDPConn error during read:", err)
+			http.Error(w, "Unable to read request", http.StatusInternalServerError)
 			return
 		}
-		if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
-			if errors.Is(err, io.ErrClosedPipe) {
-				fmt.Println("TrackLocalStaticRTP ErrClosedPipe")
-				return
-			}
-			fmt.Println("sendRtpToClient videoTrack.Write() error")
-			panic(err)
+		defer r.Body.Close()
+
+		var offer webrtc.SessionDescription
+		if err := decode(string(body), &offer); err != nil {
+			http.Error(w, "Bad offer (decode)", http.StatusBadRequest)
+			return
 		}
+		log.Println("Received SessionDescription from browser")
+
+		pc, videoTrack, rtpSender, err := initWebRTCSession(&offer)
+		if err != nil {
+			http.Error(w, "Failed to init WebRTC: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_ = rtpSender // RTCP 루프는 initWebRTCSession 안에서 시작됨
+
+		// UDP 수신(Radxa -> 이 서버)
+		listener := initUDPListener()
+		go sendRtpToClient(videoTrack, listener)
+
+		// 기본: 로컬 GStreamer OFF (Radxa가 쏨). 필요 시 ENV로 토글.
+		var gstHandle *exec.Cmd
+		if os.Getenv("LOCAL_GST") == "1" {
+			gstHandle = runGstreamerPipeline(gstContext)
+		}
+
+		handleICEConnectionState(pc, gstHandle, listener, &streamInProgress)
+		streamInProgress = true
+
+		// SDP answer 반환
+		fmt.Fprint(w, encode(pc.LocalDescription()))
+		log.Printf("Sent local SessionDescription to browser (elapsed=%s)", time.Since(start))
+	})
+
+	addr := ":" + strconv.Itoa(getenvInt("HTTP_PORT", 8080))
+	log.Printf("Server starting on %s ...", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatal("HTTP Server error: ", err)
 	}
 }
 
-// JSON encode + base64 a SessionDescription
-func encode(obj *webrtc.SessionDescription) string {
-	b, err := json.Marshal(obj)
-	if err != nil {
-		panic(err)
-	}
-
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-// Decode a base64 and unmarshal JSON into a SessionDescription
-func decode(in string, obj *webrtc.SessionDescription) {
-	b, err := base64.StdEncoding.DecodeString(in)
-	if err != nil {
-		panic(err)
-	}
-
-	if err = json.Unmarshal(b, obj); err != nil {
-		panic(err)
-	}
-}
