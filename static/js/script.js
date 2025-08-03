@@ -673,6 +673,30 @@ document.getElementById('viewCamera').addEventListener('click', function() {
   if (isStreaming) {
     // 스트리밍 중지 로직
     log('Stopping streaming...');
+    
+    // 즉시 버튼 상태를 "스트리밍 시작"으로 변경
+    const btn = document.getElementById('viewCamera');
+    const btnText = btn.querySelector('.btn-text');
+    const btnIcon = btn.querySelector('.btn-icon');
+    
+    isStreaming = false;
+    btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 시작' : 'Start Stream';
+    btnIcon.innerHTML = '<i class="fas fa-play"></i>';
+    btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
+    btn.setAttribute('aria-label', '스트리밍 시작');
+    updateStreamStatus('스트리밍이 비활성화되었습니다');
+    
+    // 비디오 플레이어를 즉시 초기 상태로 되돌림
+    const videoPlayer = document.getElementById('remoteVideo');
+    videoPlayer.innerHTML = '<div class="video-placeholder"><p data-translate="Click "Start Stream" to begin live broadcast">Click "Start Stream" to begin live broadcast</p></div>';
+    
+    // 언어 설정에 따라 placeholder 텍스트 업데이트
+    const placeholderTextElement = videoPlayer.querySelector('.video-placeholder p');
+    if (placeholderTextElement) {
+      const currentLang = getCurrentLanguage();
+      placeholderTextElement.textContent = translations[currentLang]['Click "Start Stream" to begin live broadcast'];
+    }
+    
     // 기존 연결 종료
     pc.close();
     // pc 객체를 새롭게 초기화하여 다음 스트리밍을 준비
