@@ -340,13 +340,9 @@ function getCurrentLanguage() {
 function updateSpecialElements(lang) {
   // 버튼 텍스트 업데이트
   const streamBtn = document.getElementById('viewCamera');
-  const btnText = streamBtn.querySelector('.btn-text');
-  if (btnText) {
-    if (isStreaming) {
-      btnText.textContent = translations[lang]['Stop Stream'] || 'Stop Stream';
-    } else {
-      btnText.textContent = translations[lang]['Start Stream'] || 'Start Stream';
-    }
+  if (streamBtn) {
+    // 현재 스트리밍 상태에 맞게 UI 업데이트
+    updateUIForStreamingState(isStreaming);
   }
   
   // 접근성 패널 닫기 버튼
@@ -437,6 +433,36 @@ function showInstallButton() {
 // 스트리밍 상태 관리
 let isStreaming = false;
 
+// UI 업데이트를 위한 중앙 함수
+function updateUIForStreamingState(streamingActive) {
+  isStreaming = streamingActive; // 전역 플래그 업데이트
+
+  const btn = document.getElementById('viewCamera');
+  const btnText = btn.querySelector('.btn-text');
+  const btnIcon = btn.querySelector('.btn-icon');
+  const videoPlayer = document.getElementById('remoteVideo');
+  const currentLang = getCurrentLanguage();
+
+  if (streamingActive) {
+    // 스트리밍 활성화 상태 UI
+    btnText.textContent = translations[currentLang]['Stop Stream'] || 'Stop Stream';
+    btnIcon.innerHTML = '⏹';
+    btn.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
+    btn.setAttribute('aria-label', '스트리밍 중지');
+    updateStreamStatus('스트리밍이 활성화되었습니다');
+  } else {
+    // 스트리밍 비활성화 상태 UI
+    btnText.textContent = translations[currentLang]['Start Stream'] || 'Start Stream';
+    btnIcon.innerHTML = '▶';
+    btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
+    btn.setAttribute('aria-label', '스트리밍 시작');
+    updateStreamStatus('스트리밍이 비활성화되었습니다');
+
+    // 비디오 플레이어를 초기 placeholder 상태로 되돌림
+    videoPlayer.innerHTML = `<div class="video-placeholder"><p data-translate="Click "Start Stream" to begin live broadcast">${translations[currentLang]['Click "Start Stream" to begin live broadcast']}</p></div>`;
+  }
+}
+
 // PeerConnection 초기화 함수
 function initializePeerConnection() {
   const newPc = new RTCPeerConnection({
@@ -465,35 +491,11 @@ function initializePeerConnection() {
   newPc.oniceconnectionstatechange = e => {
     log(`Connection state: ${newPc.iceConnectionState}`);
     
-    const btn = document.getElementById('viewCamera');
-    const btnText = btn.querySelector('.btn-text');
-    const btnIcon = btn.querySelector('.btn-icon');
-    
+    // 연결 상태에 따라 UI 업데이트 함수 호출
     if (newPc.iceConnectionState === 'connected') {
-      isStreaming = true;
-      btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 중지' : 'Stop Stream';
-      btnIcon.innerHTML = '<i class="fas fa-stop"></i>';
-      btn.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
-      btn.setAttribute('aria-label', '스트리밍 중지');
-      updateStreamStatus('스트리밍이 활성화되었습니다');
+      updateUIForStreamingState(true); // 스트리밍 시작됨
     } else if (newPc.iceConnectionState === 'disconnected' || newPc.iceConnectionState === 'failed' || newPc.iceConnectionState === 'closed') {
-      isStreaming = false;
-      btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 시작' : 'Start Stream';
-      btnIcon.innerHTML = '<i class="fas fa-play"></i>';
-      btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
-      btn.setAttribute('aria-label', '스트리밍 시작');
-      updateStreamStatus('스트리밍이 비활성화되었습니다');
-      
-      // 스트리밍 중지 시 비디오 플레이어를 초기 상태로 되돌림
-      const videoPlayer = document.getElementById('remoteVideo');
-      videoPlayer.innerHTML = '<div class="video-placeholder"><p data-translate="Click &quot;Start Stream&quot; to begin live broadcast">Click "Start Stream" to begin live broadcast</p></div>';
-      
-      // 언어 설정에 따라 placeholder 텍스트 업데이트
-      const placeholderTextElement = videoPlayer.querySelector('.video-placeholder p');
-      if (placeholderTextElement) {
-        const currentLang = getCurrentLanguage();
-        placeholderTextElement.textContent = translations[currentLang]['Click "Start Stream" to begin live broadcast'];
-      }
+      updateUIForStreamingState(false); // 스트리밍 중지됨
     }
   };
 
@@ -671,31 +673,11 @@ function updateStreamStatus(message) {
 
 document.getElementById('viewCamera').addEventListener('click', function() {
   if (isStreaming) {
-    // 스트리밍 중지 로직
     log('Stopping streaming...');
-    
-    // 즉시 버튼 상태를 "스트리밍 시작"으로 변경
-    const btn = document.getElementById('viewCamera');
-    const btnText = btn.querySelector('.btn-text');
-    const btnIcon = btn.querySelector('.btn-icon');
-    
-    isStreaming = false;
-    btnText.textContent = getCurrentLanguage() === 'ko' ? '스트리밍 시작' : 'Start Stream';
-    btnIcon.innerHTML = '<i class="fas fa-play"></i>';
-    btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
-    btn.setAttribute('aria-label', '스트리밍 시작');
-    updateStreamStatus('스트리밍이 비활성화되었습니다');
-    
-    // 비디오 플레이어를 즉시 초기 상태로 되돌림
-    const videoPlayer = document.getElementById('remoteVideo');
-    videoPlayer.innerHTML = '<div class="video-placeholder"><p data-translate="Click "Start Stream" to begin live broadcast">Click "Start Stream" to begin live broadcast</p></div>';
-    
-    // 언어 설정에 따라 placeholder 텍스트 업데이트
-    const placeholderTextElement = videoPlayer.querySelector('.video-placeholder p');
-    if (placeholderTextElement) {
-      const currentLang = getCurrentLanguage();
-      placeholderTextElement.textContent = translations[currentLang]['Click "Start Stream" to begin live broadcast'];
-    }
+    announceToScreenReader('스트리밍을 중지합니다');
+
+    // 버튼 클릭 시 UI를 즉시 "스트리밍 시작" 상태로 업데이트
+    updateUIForStreamingState(false);
     
     // 기존 연결 종료
     pc.close();
