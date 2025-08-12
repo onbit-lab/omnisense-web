@@ -501,6 +501,7 @@ function initializePeerConnection() {
 
   // Offer to receive 1 video track
   newPc.addTransceiver('video', {'direction': 'recvonly'});
+  newPc.addTransceiver('audio', { direction: 'recvonly' }); // 13일 오전 2시에 수정 (가장 최근)
   newPc.createOffer().then(d => newPc.setLocalDescription(d)).catch(log);
 
   return newPc;
