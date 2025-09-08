@@ -67,6 +67,16 @@ window.addEventListener('load', function() {
     // 메인 콘텐츠에 포커스 설정 (스크린 리더 사용자를 위해)
     document.getElementById('main-content').focus();
   }, 8000); // 8초 동안 GIF와 오디오 재생
+  
+  // 페이지 종료 시 WebSocket 연결 정리
+  window.addEventListener('beforeunload', function() {
+    if (ws) {
+      ws.close();
+    }
+    if (subtitleTimeout) {
+      clearTimeout(subtitleTimeout);
+    }
+  });
 });
 
 // 접근성 기능 초기화
@@ -198,7 +208,7 @@ const translations = {
     'Click "Start Stream" to begin live broadcast': '"스트리밍 시작"을 클릭하여 실시간 방송을 시작하세요',
     'Start Stream': '스트리밍 시작',
     'Stop Stream': '스트리밍 중지',
-    'HD 1280x960': 'HD 1280x960',
+    'HD 1280x720': 'HD 1280x720',
     'Viewers': '시청자',
     'Quality': '화질',
     'Stream Console': '스트리밍 콘솔',
@@ -208,7 +218,7 @@ const translations = {
     'Video Quality': '비디오 화질',
     'Frame Rate': '프레임율',
     'Audio': '오디오',
-    'HD (1280x960)': 'HD (1280x960)',
+    'HD (1280x720)': 'HD (1280x720)',
     'FHD (1920x1080)': 'FHD (1920x1080)',
     '4K (3840x2160)': '4K (3840x2160)',
     '30 FPS': '30 FPS',
@@ -262,7 +272,7 @@ const translations = {
     'Click "Start Stream" to begin live broadcast': 'Click "Start Stream" to begin live broadcast',
     'Start Stream': 'Start Stream',
     'Stop Stream': 'Stop Stream',
-    'HD 1280x960': 'HD 1280x960',
+    'HD 1280x720': 'HD 1280x720',
     'Viewers': 'Viewers',
     'Quality': 'Quality',
     'Stream Console': 'Stream Console',
@@ -272,7 +282,7 @@ const translations = {
     'Video Quality': 'Video Quality',
     'Frame Rate': 'Frame Rate',
     'Audio': 'Audio',
-    'HD (1280x960)': 'HD (1280x960)',
+    'HD (1280x720)': 'HD (1280x720)',
     'FHD (1920x1080)': 'FHD (1920x1080)',
     '4K (3840x2160)': '4K (3840x2160)',
     '30 FPS': '30 FPS',
@@ -506,10 +516,102 @@ function initializePeerConnection() {
   return newPc;
 }
 
+// WebSocket 연결 및 자막 처리
+function connectWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws`;
+  
+  ws = new WebSocket(wsUrl);
+  
+  ws.onopen = function() {
+    log('WebSocket connected for subtitles');
+    announceToScreenReader('자막 서비스가 연결되었습니다');
+  };
+  
+  ws.onmessage = function(event) {
+    try {
+      const subtitleData = JSON.parse(event.data);
+      updateSubtitleOverlay(subtitleData);
+    } catch (error) {
+      console.error('Error parsing subtitle data:', error);
+    }
+  };
+  
+  ws.onclose = function() {
+    log('WebSocket disconnected. Attempting to reconnect...');
+    announceToScreenReader('자막 서비스 연결이 끊어졌습니다. 재연결을 시도합니다');
+    
+    // 3초 후 재연결 시도
+    setTimeout(() => {
+      connectWebSocket();
+    }, 3000);
+  };
+  
+  ws.onerror = function(error) {
+    console.error('WebSocket error:', error);
+    log('WebSocket error occurred');
+  };
+}
+
+function updateSubtitleOverlay(subtitleData) {
+  const subtitleBox = document.getElementById('subtitleBox');
+  const emoji = document.getElementById('subtitleEmoji');
+  const langCode = document.getElementById('subtitleLangCode');
+  const timestamp = document.getElementById('subtitleTimestamp');
+  const text = document.getElementById('subtitleText');
+  
+  if (!subtitleBox || !subtitleData.text.trim()) {
+    return;
+  }
+  
+  // 자막 데이터 업데이트
+  emoji.textContent = subtitleData.emoji || '🙂';
+  langCode.textContent = subtitleData.lang_code || 'KR';
+  timestamp.textContent = `${subtitleData.timestamp.toFixed(1)}s`;
+  text.textContent = subtitleData.text;
+  
+  // 자막 박스 표시
+  subtitleBox.style.display = 'block';
+  subtitleBox.classList.remove('fade-out');
+  
+  // 기존 타이머 클리어
+  if (subtitleTimeout) {
+    clearTimeout(subtitleTimeout);
+  }
+  
+  // 최종 자막인 경우 5초 후 숨기기, 부분 자막인 경우 3초 후 숨기기
+  const hideDelay = subtitleData.is_final ? 5000 : 3000;
+  
+  subtitleTimeout = setTimeout(() => {
+    hideSubtitleOverlay();
+  }, hideDelay);
+  
+  // 스크린 리더에 자막 알림
+  if (subtitleData.is_final) {
+    announceToScreenReader(`자막: ${subtitleData.text}`);
+  }
+}
+
+function hideSubtitleOverlay() {
+  const subtitleBox = document.getElementById('subtitleBox');
+  if (subtitleBox) {
+    subtitleBox.classList.add('fade-out');
+    
+    // 애니메이션 완료 후 숨기기
+    setTimeout(() => {
+      subtitleBox.style.display = 'none';
+      subtitleBox.classList.remove('fade-out');
+    }, 300);
+  }
+}
+
 // Navigation functionality
 document.addEventListener('DOMContentLoaded', function() {
   // PeerConnection 초기화
   pc = initializePeerConnection();
+  
+  // WebSocket 연결
+  connectWebSocket();
   
   // Show navigation after loading screen
   setTimeout(function() {
@@ -634,12 +736,12 @@ function updateQualityDisplay(quality) {
 
 function getQualityDisplayText(quality) {
   const qualityMap = {
-    'hd': 'HD 1280x960',
+    'hd': 'HD 1280x720',
     'fhd': 'FHD 1920x1080',
     '4k': '4K 3840x2160'
   };
   
-  return qualityMap[quality] || 'HD 1280x960';
+  return qualityMap[quality] || 'HD 1280x720';
 }
 
 function getShortQualityText(quality) {
@@ -654,6 +756,8 @@ function getShortQualityText(quality) {
 
 // 전역 변수 선언
 let pc;
+let ws;
+let subtitleTimeout;
 
 let log = msg => {
   const timestamp = new Date().toLocaleTimeString();

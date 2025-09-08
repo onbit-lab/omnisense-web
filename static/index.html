@@ -145,7 +145,18 @@
                             </div>
                         </div>
                         <div class="video-overlay">
-                            <div class="stream-quality">HD 1280x960</div>
+                            <div class="stream-quality"></div>
+                        </div>
+                        <!-- 실시간 자막 오버레이 -->
+                        <div id="subtitleBox" class="subtitle-overlay" style="display: none;">
+                            <div class="subtitle-content">
+                                <div class="subtitle-header">
+                                    <span id="subtitleEmoji" class="subtitle-emoji">🙂</span>
+                                    <span id="subtitleLangCode" class="subtitle-lang">KR</span>
+                                    <span id="subtitleTimestamp" class="subtitle-timestamp">0.0s</span>
+                                </div>
+                                <div id="subtitleText" class="subtitle-text">자막이 여기에 표시됩니다</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -191,7 +202,7 @@
                     <div class="setting-group">
                         <label class="setting-label" for="videoQuality" data-translate="Video Quality">Video Quality</label>
                         <select class="setting-select" id="videoQuality" aria-describedby="quality-help">
-                            <option value="hd" data-translate="HD (1280x960)">HD (1280x960)</option>
+                            <option value="hd" data-translate="HD (1280x720)">HD (1280x720)</option>
                             <option value="fhd" data-translate="FHD (1920x1080)">FHD (1920x1080)</option>
                             <option value="4k" data-translate="4K (3840x2160)">4K (3840x2160)</option>
                         </select>

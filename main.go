@@ -14,9 +14,80 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 )
+
+// ---------- Subtitle structures ----------
+
+type SubtitleData struct {
+	Text      string  `json:"text"`
+	Emotion   string  `json:"emotion"`
+	Language  string  `json:"language"`
+	Timestamp float64 `json:"timestamp"`
+	IsFinal   bool    `json:"is_final"`
+	Emoji     string  `json:"emoji"`
+	LangCode  string  `json:"lang_code"`
+}
+
+type Client struct {
+	conn *websocket.Conn
+	send chan []byte
+}
+
+type Hub struct {
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
+	unregister chan *Client
+}
+
+func newHub() *Hub {
+	return &Hub{
+		clients:    make(map[*Client]bool),
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+	}
+}
+
+func (h *Hub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.clients[client] = true
+			log.Printf("Client connected. Total clients: %d", len(h.clients))
+
+		case client := <-h.unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+				log.Printf("Client disconnected. Total clients: %d", len(h.clients))
+			}
+
+		case message := <-h.broadcast:
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
+}
+
+var hub *Hub
+
+// ---------- WebSocket upgrader ----------
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow connections from any origin
+	},
+}
 
 // ---------- helpers ----------
 
@@ -218,6 +289,92 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 	return cmd
 }
 
+// ---------- WebSocket handlers ----------
+
+func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade failed: %v", err)
+		return
+	}
+
+	client := &Client{
+		conn: conn,
+		send: make(chan []byte, 256),
+	}
+
+	hub.register <- client
+
+	go client.writePump()
+	go client.readPump()
+}
+
+func (c *Client) readPump() {
+	defer func() {
+		hub.unregister <- c
+		c.conn.Close()
+	}()
+
+	c.conn.SetReadLimit(512)
+	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	for {
+		_, _, err := c.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("WebSocket error: %v", err)
+			}
+			break
+		}
+	}
+}
+
+func (c *Client) writePump() {
+	ticker := time.NewTicker(54 * time.Second)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			// Add queued chat messages to the current websocket message.
+			n := len(c.send)
+			for i := 0; i < n; i++ {
+				w.Write([]byte{'\n'})
+				w.Write(<-c.send)
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
 // ---------- ICE 상태 변화 시 정리 ----------
 
 func handleICEConnectionState(pc *webrtc.PeerConnection, gstHandle *exec.Cmd, listener *net.UDPConn, streamInProgress *bool) {
@@ -247,9 +404,16 @@ func handleICEConnectionState(pc *webrtc.PeerConnection, gstHandle *exec.Cmd, li
 // ---------- HTTP server ----------
 
 func main() {
+	// WebSocket Hub 초기화
+	hub = newHub()
+	go hub.run()
+
 	// 정적 파일
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
+
+	// WebSocket 엔드포인트
+	http.HandleFunc("/ws", handleWebSocket)
 
 	gstContext, cancelGst := context.WithCancel(context.Background())
 	defer cancelGst()
@@ -305,6 +469,35 @@ func main() {
 		// SDP answer 반환
 		fmt.Fprint(w, encode(pc.LocalDescription()))
 		log.Printf("Sent local SessionDescription to browser (elapsed=%s)", time.Since(start))
+	})
+
+	// 자막 수신 엔드포인트
+	http.HandleFunc("/subtitle", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var subtitle SubtitleData
+		if err := json.NewDecoder(r.Body).Decode(&subtitle); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// 자막을 JSON으로 직렬화하여 WebSocket으로 브로드캐스트
+		message, err := json.Marshal(subtitle)
+		if err != nil {
+			log.Printf("Failed to marshal subtitle: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		hub.broadcast <- message
+		
+		log.Printf("Received subtitle: %s [%s] %s", subtitle.LangCode, subtitle.Emoji, subtitle.Text)
+		
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
 	})
 
 	addr := ":" + strconv.Itoa(getenvInt("HTTP_PORT", 8080))

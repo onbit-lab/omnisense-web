@@ -1052,3 +1052,170 @@ body.screen-reader-mode .logs-content:empty::before {
         font-size: 1.5rem;
     }
 }
+
+/* Subtitle Overlay Styles (영상 위 오버레이) */
+.subtitle-overlay {
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 800px;
+    min-width: 600px;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 20px 25px;
+    animation: subtitleSlideIn 0.3s ease-out;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    min-height: 80px;
+    z-index: 1001;
+}
+
+.subtitle-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.subtitle-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.9rem;
+    color: #00d4ff;
+    font-weight: 500;
+}
+
+.subtitle-emoji {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.subtitle-lang {
+    background: rgba(0, 212, 255, 0.2);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(0, 212, 255, 0.4);
+}
+
+.subtitle-timestamp {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.8rem;
+    font-family: 'Courier New', monospace;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.subtitle-text {
+    color: #ffffff;
+    font-size: 1.3rem;
+    line-height: 1.5;
+    font-weight: 400;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+    word-wrap: break-word;
+    hyphens: auto;
+    margin-top: 5px;
+}
+
+/* Subtitle animations */
+@keyframes subtitleSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes subtitleSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+}
+
+.subtitle-overlay.fade-out {
+    animation: subtitleSlideOut 0.3s ease-in forwards;
+}
+
+/* Responsive subtitle styles */
+@media (max-width: 768px) {
+    .subtitle-overlay {
+        width: 95%;
+        max-width: 600px;
+        min-width: 400px;
+        bottom: 10px;
+        padding: 15px 20px;
+        min-height: 70px;
+    }
+    
+    .subtitle-text {
+        font-size: 1.1rem;
+    }
+    
+    .subtitle-header {
+        font-size: 0.8rem;
+        gap: 12px;
+    }
+    
+    .subtitle-emoji {
+        font-size: 1.2rem;
+    }
+    
+    .subtitle-lang {
+        padding: 3px 6px;
+        font-size: 0.7rem;
+    }
+    
+    .subtitle-timestamp {
+        font-size: 0.7rem;
+        padding: 2px 5px;
+    }
+}
+
+@media (max-width: 480px) {
+    .subtitle-overlay {
+        width: 98%;
+        max-width: 400px;
+        min-width: 300px;
+        bottom: 8px;
+        padding: 12px 15px;
+        min-height: 60px;
+    }
+    
+    .subtitle-text {
+        font-size: 1rem;
+    }
+    
+    .subtitle-header {
+        font-size: 0.7rem;
+        gap: 10px;
+    }
+    
+    .subtitle-emoji {
+        font-size: 1.1rem;
+    }
+    
+    .subtitle-lang {
+        padding: 2px 5px;
+        font-size: 0.6rem;
+    }
+    
+    .subtitle-timestamp {
+        font-size: 0.6rem;
+        padding: 2px 4px;
+    }
+}
