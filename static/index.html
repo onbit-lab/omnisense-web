@@ -35,7 +35,10 @@
     <!-- Accessibility preferences panel -->
     <div id="accessibilityPanel" class="accessibility-panel" role="dialog" aria-labelledby="a11y-title" aria-hidden="true">
         <div class="accessibility-content">
-            <h2 id="a11y-title" data-translate="접근성 설정">접근성 설정</h2>
+            <div class="accessibility-header">
+                <h2 id="a11y-title" data-translate="접근성 설정">접근성 설정</h2>
+                <button class="close-accessibility-x" aria-label="접근성 패널 닫기">&times;</button>
+            </div>
             <div class="accessibility-controls">
                 <div class="control-group">
                     <label for="fontSize" data-translate="글자 크기">글자 크기</label>
@@ -74,29 +77,21 @@
                     </div>
                 </div>
             </div>
-            <button class="close-accessibility" aria-label="접근성 패널 닫기">닫기</button>
         </div>
     </div>
 
     <!-- Loading Screen -->
     <div id="loadingScreen" class="loading-screen" role="status" aria-label="로딩 중">
         <img src="onbit_lab_razor1911_noflash.gif" alt="Loading..." class="loading-gif">
-        <audio id="loadingAudio" preload="auto">
-            <source src="loading-sound.mp3" type="audio/mpeg">
-            <!-- 브라우저가 MP3를 지원하지 않는 경우를 위한 대체 포맷 -->
-            <source src="loading-sound.ogg" type="audio/ogg">
-            <source src="loading-sound.wav" type="audio/wav">
-        </audio>
     </div>
 
     <!-- Navigation -->
     <nav id="mainNav" class="main-nav hidden" role="navigation" aria-label="주 메뉴">
         <div class="nav-container">
             <div class="nav-brand">
-                <img src="hideflogo.png" alt="OMNISENSE" class="brand-logo">
-                <button id="accessibilityToggle" class="accessibility-toggle" aria-label="접근성 설정 열기" title="접근성 설정">
-                    <span class="accessibility-icon">⚙️</span>
-                </button>
+                <a href="#stream" class="nav-link brand-logo" data-section="stream" role="menuitem">
+                    <img src="hideflogo.png" alt="OMNISENSE" class="brand-logo-img">
+                </a>
             </div>
             <div class="nav-menu" id="navMenu" role="menubar">
                 <a href="#stream" class="nav-link active" data-section="stream" role="menuitem" aria-current="page" data-translate="Stream">
@@ -237,28 +232,28 @@
                         <div class="status-icon">🔋</div>
                         <div class="status-info">
                             <span class="status-label" id="battery-label" data-translate="Battery">Battery</span>
-                            <span class="status-value" aria-labelledby="battery-label">85%</span>
+                            <span class="status-value" aria-labelledby="battery-label"></span>
                         </div>
                     </div>
                     <div class="status-card" role="listitem">
                         <div class="status-icon">📶</div>
                         <div class="status-info">
                             <span class="status-label" id="signal-label" data-translate="Signal">Signal</span>
-                            <span class="status-value" aria-labelledby="signal-label" data-translate="Strong">Strong</span>
+                            <span class="status-value" aria-labelledby="signal-label"></span>
                         </div>
                     </div>
                     <div class="status-card" role="listitem">
                         <div class="status-icon">🌡️</div>
                         <div class="status-info">
                             <span class="status-label" id="temp-label" data-translate="Temperature">Temperature</span>
-                            <span class="status-value" aria-labelledby="temp-label">42°C</span>
+                            <span class="status-value" aria-labelledby="temp-label"></span>
                         </div>
                     </div>
                     <div class="status-card" role="listitem">
                         <div class="status-icon">💾</div>
                         <div class="status-info">
                             <span class="status-label" id="storage-label" data-translate="Storage">Storage</span>
-                            <span class="status-value" aria-labelledby="storage-label">12GB Free</span>
+                            <span class="status-value" aria-labelledby="storage-label"></span>
                         </div>
                     </div>
                 </div>
@@ -272,7 +267,7 @@
                 <div class="help-content">
                     <div class="help-item">
                         <h3 data-translate="Quick Start">Quick Start</h3>
-                        <p data-translate='Click "Start Stream" to begin broadcasting. The wearable camera will automatically connect and start streaming.'>"스트림 시작"을 클릭하여 방송을 시작하세요. 웨어러블 카메라가 자동으로 연결되어 스트리밍을 시작합니다.</p>
+                        <p data-translate='Click "Start Stream" to begin broadcasting. The wearable camera will automatically connect and start streaming.'>"스트리밍 시작"을 클릭하여 방송을 시작하세요. 웨어러블 카메라가 자동으로 연결되어 스트리밍을 시작합니다.</p>
                     </div>
                     <div class="help-item">
                         <h3 data-translate="Troubleshooting">Troubleshooting</h3>
@@ -292,6 +287,11 @@
             </div>
         </section>
     </main>
+
+    <!-- Floating Accessibility Button -->
+    <button id="accessibilityToggle" class="accessibility-floating hidden" aria-label="접근성 설정 열기" title="접근성 설정">
+        <span class="accessibility-icon">⚙️</span>
+    </button>
 
     <script src="js/script.js"></script>
 </body>

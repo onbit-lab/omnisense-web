@@ -5,10 +5,13 @@ set -e
 
 echo "Starting video and audio streaming..."
 
-# Get the device's IP address to use for streaming
-HOST="192.168.0.81"  # Change this to match your vstream.sh setting
+# Get the server's IP address automatically
+HOST="$(hostname -I | awk '{print $1}')"
+export HOST  # Export so it's passed to child scripts
 VIDEO_PORT=5004
 AUDIO_PORT=5006
+
+echo "Using server address: $HOST"
 
 # Start video stream in background
 echo "Starting video stream..."

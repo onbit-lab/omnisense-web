@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -29,6 +32,13 @@ type SubtitleData struct {
 	IsFinal   bool    `json:"is_final"`
 	Emoji     string  `json:"emoji"`
 	LangCode  string  `json:"lang_code"`
+}
+
+type SystemStatus struct {
+	Battery     string `json:"battery"`
+	Signal      string `json:"signal"`
+	Temperature string `json:"temperature"`
+	Storage     string `json:"storage"`
 }
 
 type Client struct {
@@ -124,205 +134,132 @@ func decode(s string, v any) error {
 
 // ---------- WebRTC ----------
 
-func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender, error) {
-	api := webrtc.NewAPI()
-
+func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP, error) {
+	log.Printf("Initializing WebRTC session")
+	
+	// 내부망 지원을 위한 간단한 설정
+	s := webrtc.SettingEngine{}
+	
+	// 서버 IP를 호스트 후보로 등록 (내부망 연결 지원)
+	serverIP := getLocalIP()
+	if serverIP != "127.0.0.1" {
+		s.SetNAT1To1IPs([]string{serverIP}, webrtc.ICECandidateTypeHost)
+		log.Printf("Server IP %s registered for LAN connections", serverIP)
+	}
+	
+	api := webrtc.NewAPI(webrtc.WithSettingEngine(s))
+	
 	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
+		ICEServers: []webrtc.ICEServer{{
+			URLs: []string{"stun:stun.l.google.com:19302"},
+		}},
+		ICETransportPolicy: webrtc.ICETransportPolicyAll,
+		BundlePolicy:       webrtc.BundlePolicyMaxBundle,
 	}
 
 	pc, err := api.NewPeerConnection(config)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("NewPeerConnection: %w", err)
+		return nil, nil, nil, fmt.Errorf("NewPeerConnection: %w", err)
 	}
 
-	// H.264 트랙 (RTP 그대로 씁니다)
+	// 트랙 생성 및 추가
 	videoTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
-		"video", "pion",
-	)
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, "video", "pion")
 	if err != nil {
-		_ = pc.Close()
-		return nil, nil, nil, nil, fmt.Errorf("NewTrackLocalStaticRTP video: %w", err)
+		pc.Close()
+		return nil, nil, nil, fmt.Errorf("video track: %w", err)
 	}
 
-	// Opus 오디오 트랙
 	audioTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio", "pion",
-	)
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, "audio", "pion")
 	if err != nil {
-		_ = pc.Close()
-		return nil, nil, nil, nil, fmt.Errorf("NewTrackLocalStaticRTP audio: %w", err)
+		pc.Close()
+		return nil, nil, nil, fmt.Errorf("audio track: %w", err)
 	}
 
-	rtpSender, err := pc.AddTrack(videoTrack)
-	if err != nil {
-		_ = pc.Close()
-		return nil, nil, nil, nil, fmt.Errorf("AddTrack video: %w", err)
+	if _, err = pc.AddTrack(videoTrack); err != nil {
+		pc.Close()
+		return nil, nil, nil, fmt.Errorf("add video track: %w", err)
 	}
-	
-	_, err = pc.AddTrack(audioTrack)
-	if err != nil {
-		_ = pc.Close()
-		return nil, nil, nil, nil, fmt.Errorf("AddTrack audio: %w", err)
+	if _, err = pc.AddTrack(audioTrack); err != nil {
+		pc.Close()
+		return nil, nil, nil, fmt.Errorf("add audio track: %w", err)
 	}
 
-	// 브라우저의 RTCP 읽기 루프(에러 나면 종료)
-	go readIncomingRTCPPackets(rtpSender)
-
-	// 리모트 SDP 설정
+	// SDP 처리
 	if err := pc.SetRemoteDescription(*offer); err != nil {
-		_ = pc.Close()
-		return nil, nil, nil, nil, fmt.Errorf("SetRemoteDescription: %w", err)
+		pc.Close()
+		return nil, nil, nil, fmt.Errorf("SetRemoteDescription: %w", err)
 	}
 
-	// Answer 생성/설정
 	answer, err := pc.CreateAnswer(nil)
 	if err != nil {
-		_ = pc.Close()
-		return nil, nil, nil, nil, fmt.Errorf("CreateAnswer: %w", err)
+		pc.Close()
+		return nil, nil, nil, fmt.Errorf("CreateAnswer: %w", err)
 	}
 	if err := pc.SetLocalDescription(answer); err != nil {
-		_ = pc.Close()
-		return nil, nil, nil, nil, fmt.Errorf("SetLocalDescription: %w", err)
+		pc.Close()
+		return nil, nil, nil, fmt.Errorf("SetLocalDescription: %w", err)
 	}
 
-	// ICE 수집 완료 대기 후 반환
-	g := webrtc.GatheringCompletePromise(pc)
-	<-g
-
-	return pc, videoTrack, audioTrack, rtpSender, nil
+	// ICE 수집 완료 대기
+	<-webrtc.GatheringCompletePromise(pc)
+	return pc, videoTrack, audioTrack, nil
 }
 
-func readIncomingRTCPPackets(sender *webrtc.RTPSender) {
-	buf := make([]byte, 1500)
-	for {
-		if _, _, err := sender.Read(buf); err != nil {
-			return // 연결 종료/에러 시 루프 종료
-		}
-	}
-}
+
 
 // ---------- UDP(RTP) ----------
 
-func initUDPListener() *net.UDPConn {
-	bindIP := getenvStr("RTP_BIND_IP", "0.0.0.0")
-	port := getenvInt("RTP_PORT", 5004)
-
+func initUDPListener(portEnv string, defaultPort int, label string) (*net.UDPConn, error) {
 	addr := &net.UDPAddr{
-		IP:   net.ParseIP(bindIP),
-		Port: port,
+		IP:   net.ParseIP(getenvStr("RTP_BIND_IP", "0.0.0.0")),
+		Port: getenvInt(portEnv, defaultPort),
 	}
-	conn, err := net.ListenUDP("udp", addr)
+	
+	lc := &net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
+			var err error
+			c.Control(func(fd uintptr) {
+				err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			})
+			return err
+		},
+	}
+	
+	conn, err := lc.ListenPacket(context.Background(), "udp", addr.String())
 	if err != nil {
-		log.Fatalf("failed to bind UDP %s:%d: %v", bindIP, port, err)
+		return nil, fmt.Errorf("%s UDP port %d in use", label, addr.Port)
 	}
+	
+	udpConn := conn.(*net.UDPConn)
+	bufSize := 2 * 1024 * 1024
+	udpConn.SetReadBuffer(bufSize)
+	udpConn.SetWriteBuffer(bufSize)
 
-	// 버퍼 여유
-	if err := conn.SetReadBuffer(4 * 1024 * 1024); err != nil {/* Lines 210-211 omitted */}
-	if err := conn.SetWriteBuffer(4 * 1024 * 1024); err != nil {/* Lines 213-214 omitted */}
-
-	la := conn.LocalAddr().(*net.UDPAddr)
-	log.Printf("UDP listener ready on %s:%d", la.IP.String(), la.Port)
-	return conn
-}
-
-// Audio UDP listener
-func initAudioUDPListener() *net.UDPConn {
-	bindIP := getenvStr("RTP_BIND_IP", "0.0.0.0")
-	port := getenvInt("RTP_AUDIO_PORT", 5006)
-
-	addr := &net.UDPAddr{
-		IP:   net.ParseIP(bindIP),
-		Port: port,
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		log.Fatalf("failed to bind UDP (audio) %s:%d: %v", bindIP, port, err)
-	}
-
-	// 버퍼 여유
-	if err := conn.SetReadBuffer(1 * 1024 * 1024); err != nil {}
-	if err := conn.SetWriteBuffer(1 * 1024 * 1024); err != nil {}
-
-	la := conn.LocalAddr().(*net.UDPAddr)
-	log.Printf("Audio UDP listener ready on %s:%d", la.IP.String(), la.Port)
-	return conn
+	log.Printf("%s UDP listener ready on %s", label, addr)
+	return udpConn, nil
 }
 
 func sendRtpToClient(track *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
-	defer func() {
-		_ = listener.Close()
-	}()
-
+	defer listener.Close()
+	
 	buf := make([]byte, 2048)
 	var pkt rtp.Packet
 
 	for {
 		n, _, err := listener.ReadFrom(buf)
 		if err != nil {
-			// listener close 등으로 종료됨
-			if !isNetClosedErr(err) {
-				log.Printf("RTP read error: %v", err)
-			}
-			return
+			return // 연결 종료
 		}
 
-		if err := pkt.Unmarshal(buf[:n]); err != nil {
-			// 가끔 나쁜 패킷이 들어오면 스킵
-			continue
-		}
-
-		if err := track.WriteRTP(&pkt); err != nil {
-			log.Printf("track.WriteRTP error: %v", err)
-			return
+		if pkt.Unmarshal(buf[:n]) == nil {
+			track.WriteRTP(&pkt)
 		}
 	}
 }
 
-func isNetClosedErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	// 플랫폼별 메시지가 달라서 문자열 포함 체크
-	es := err.Error()
-	return es == "use of closed network connection" ||
-		es == "EOF" ||
-		es == "file already closed"
-}
 
-// ---------- (옵션) 로컬 GStreamer ----------
-// 기본값으로는 사용하지 않습니다. LOCAL_GST=1 일 때만 시도.
-func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
-	if os.Getenv("LOCAL_GST") != "1" {
-		return nil
-	}
-
-	// ※ 예시: Rockchip 환경(라즈베리에선 보통 실패)
-	// 필요하면 환경 변수 GST_CMD 로 명령을 교체하세요.
-	cmdline := getenvStr("GST_CMD",
-		`gst-launch-1.0 -v `+
-			`v4l2src device=/dev/video0 io-mode=4 ! `+
-			`video/x-raw,width=1280,height=720 ! `+
-			`queue ! mpph264enc profile=baseline header-mode=each-idr ! `+
-			`rtph264pay pt=96 mtu=1200 config-interval=1 ! `+
-			`udpsink host=127.0.0.1 port=`+strconv.Itoa(getenvInt("RTP_PORT", 5004)),
-	)
-
-	cmd := exec.CommandContext(ctx, "bash", "-lc", cmdline)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		log.Printf("failed to start local GStreamer (ignored): %v", err)
-		return nil
-	}
-	log.Printf("local GStreamer started (pid=%d)", cmd.Process.Pid)
-	return cmd
-}
 
 // ---------- WebSocket handlers ----------
 
@@ -348,20 +285,27 @@ func (c *Client) readPump() {
 	defer func() {
 		hub.unregister <- c
 		c.conn.Close()
+		log.Printf("WebSocket client disconnected")
 	}()
 
 	c.conn.SetReadLimit(512)
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second)) // 더 짧은 타임아웃
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		return nil
+	})
+
+	// 연결 끊김을 즉시 감지하기 위한 클로즈 핸들러
+	c.conn.SetCloseHandler(func(code int, text string) error {
+		log.Printf("WebSocket close: code=%d, text=%s", code, text)
 		return nil
 	})
 
 	for {
 		_, _, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket error: %v", err)
+			if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure) {
+				log.Printf("WebSocket unexpected error: %v", err)
 			}
 			break
 		}
@@ -369,7 +313,7 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) writePump() {
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(25 * time.Second) // 더 빈번한 핑
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()
@@ -378,7 +322,7 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)) // 더 짧은 타임아웃
 			if !ok {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
@@ -390,7 +334,7 @@ func (c *Client) writePump() {
 			}
 			w.Write(message)
 
-			// Add queued chat messages to the current websocket message.
+			// 대기 중인 메시지들 일괄 처리
 			n := len(c.send)
 			for i := 0; i < n; i++ {
 				w.Write([]byte{'\n'})
@@ -402,7 +346,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -410,34 +354,42 @@ func (c *Client) writePump() {
 	}
 }
 
-// ---------- ICE 상태 변화 시 정리 ----------
+func setupPeerConnection(pc *webrtc.PeerConnection, cleanup func()) {
+	var once bool
+	
+	doCleanup := func(reason string) {
+		if !once {
+			once = true
+			log.Printf("Connection ended: %s", reason)
+			cleanup()
+		}
+	}
 
-func handleICEConnectionState(pc *webrtc.PeerConnection, gstHandle *exec.Cmd, listener *net.UDPConn, audioListener *net.UDPConn, streamInProgress *bool) {
+	// 즉시 정리를 위한 상태 모니터링
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		log.Printf("ICE state: %s", s.String())
-
+		log.Printf("Connection: %s", s.String())
 		switch s {
-		case webrtc.PeerConnectionStateFailed,
-			webrtc.PeerConnectionStateClosed,
-			webrtc.PeerConnectionStateDisconnected:
-			// 자원 반납 (nil-safe)
-			if gstHandle != nil && gstHandle.Process != nil {
-				_ = gstHandle.Process.Kill()
-				log.Printf("terminated local GStreamer")
-			}
-			if listener != nil {
-				_ = listener.Close()
-			}
-			if audioListener != nil {
-				_ = audioListener.Close()
-			}
-			if pc != nil {
-				_ = pc.Close()
-			}
-			*streamInProgress = false
+		case webrtc.PeerConnectionStateFailed, 
+			 webrtc.PeerConnectionStateClosed,
+			 webrtc.PeerConnectionStateDisconnected:
+			doCleanup(s.String())
 		}
 	})
+
+	pc.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
+		log.Printf("ICE: %s", s.String())
+		switch s {
+		case webrtc.ICEConnectionStateFailed,
+			 webrtc.ICEConnectionStateClosed,
+			 webrtc.ICEConnectionStateDisconnected:
+			doCleanup(s.String())
+		}
+	})
+
+
 }
+
+
 
 // ---------- HTTP server ----------
 
@@ -453,20 +405,20 @@ func main() {
 	// WebSocket 엔드포인트
 	http.HandleFunc("/ws", handleWebSocket)
 
-	gstContext, cancelGst := context.WithCancel(context.Background())
-	defer cancelGst()
-
 	var streamInProgress bool
 
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		clientIP := getClientIP(r)
+		log.Printf("Stream request from client: %s", clientIP)
+		
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		if streamInProgress {
-			log.Println("Attempted new session while stream in progress")
-			http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+			log.Printf("Stream blocked - already in progress (from %s)", clientIP)
+			http.Error(w, "Stream already in progress", http.StatusServiceUnavailable)
 			return
 		}
 
@@ -479,38 +431,62 @@ func main() {
 
 		var offer webrtc.SessionDescription
 		if err := decode(string(body), &offer); err != nil {
-			http.Error(w, "Bad offer (decode)", http.StatusBadRequest)
+			http.Error(w, "Bad offer", http.StatusBadRequest)
 			return
 		}
-		log.Println("Received SessionDescription from browser")
+		log.Printf("Received offer from %s", clientIP)
 
-		pc, videoTrack, audioTrack, rtpSender, err := initWebRTCSession(&offer)
+		pc, videoTrack, audioTrack, err := initWebRTCSession(&offer)
 		if err != nil {
-			http.Error(w, "Failed to init WebRTC: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "WebRTC failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		_ = rtpSender // RTCP 루프는 initWebRTCSession 안에서 시작됨
 
-		// 비디오 UDP 수신(Radxa -> 이 서버)
-		listener := initUDPListener()
-		go sendRtpToClient(videoTrack, listener)
+		// UDP 리스너 초기화
+		videoListener, err := initUDPListener("RTP_PORT", 5004, "Video")
+		if err != nil {
+			pc.Close()
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		
-		// 오디오 UDP 수신(마이크 -> 이 서버)
-		audioListener := initAudioUDPListener()
+		audioListener, err := initUDPListener("RTP_AUDIO_PORT", 5006, "Audio")
+		if err != nil {
+			pc.Close()
+			videoListener.Close()
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+
+		// RTP 전송 시작
+		go sendRtpToClient(videoTrack, videoListener)
 		go sendRtpToClient(audioTrack, audioListener)
 
-		// 기본: 로컬 GStreamer OFF (Radxa가 쏨). 필요 시 ENV로 토글.
-		var gstHandle *exec.Cmd
-		if os.Getenv("LOCAL_GST") == "1" {
-			gstHandle = runGstreamerPipeline(gstContext)
-		}
-
-		handleICEConnectionState(pc, gstHandle, listener, audioListener, &streamInProgress)
+		// 즉시 정리를 위한 연결 모니터링
 		streamInProgress = true
+		setupPeerConnection(pc, func() {
+			streamInProgress = false
+			videoListener.Close()
+			audioListener.Close()
+			pc.Close()
+			log.Printf("Stream resources cleaned up for %s", clientIP)
+		})
 
 		// SDP answer 반환
 		fmt.Fprint(w, encode(pc.LocalDescription()))
-		log.Printf("Sent local SessionDescription to browser (elapsed=%s)", time.Since(start))
+		log.Printf("Stream started for %s (elapsed=%s)", clientIP, time.Since(start))
+	})
+
+	// Reset endpoint to clear stream state in case of issues
+	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		streamInProgress = false
+		log.Printf("Stream state reset by client request (method: %s)", r.Method)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK - Stream state reset"))
 	})
 
 	// 자막 수신 엔드포인트
@@ -542,10 +518,397 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	addr := ":" + strconv.Itoa(getenvInt("HTTP_PORT", 8080))
-	log.Printf("Server starting on %s ...", addr)
+	// 시스템 상태 엔드포인트
+	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		status := getSystemStatus()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+	})
+
+	port := getenvInt("HTTP_PORT", 8080)
+	addr := ":" + strconv.Itoa(port)
+	localIP := getLocalIP()
+	
+	log.Printf("🚀 OMNISENSE Server starting...")
+	log.Printf("📍 Local access: http://localhost:%d", port)
+	log.Printf("🌐 Network access: http://%s:%d", localIP, port)
+	log.Printf("📺 WebRTC server IP: %s (for LAN connections)", localIP)
+	
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal("HTTP Server error: ", err)
 	}
 }
+
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "127.0.0.1"
+	}
+	
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipv4 := ipnet.IP.To4(); ipv4 != nil {
+				return ipv4.String()
+			}
+		}
+	}
+	return "127.0.0.1"
+}
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if idx := strings.Index(xff, ","); idx > 0 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return xff
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	if ip, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
+func getSystemStatus() SystemStatus {
+	status := SystemStatus{
+		Battery:     getBatteryStatus(),
+		Signal:      getNetworkStatus(),
+		Temperature: getCPUTemperature(),
+		Storage:     getStorageStatus(),
+	}
+	return status
+}
+
+func getBatteryStatus() string {
+	powerSupplyDir := "/sys/class/power_supply"
+	entries, err := os.ReadDir(powerSupplyDir)
+	if err != nil {
+		return "전원 정보 없음"
+	}
+	
+	var hasBattery bool
+	var hasActivePower bool
+	var batteryLevel string
+	var powerType string
+	
+	for _, entry := range entries {
+		path := powerSupplyDir + "/" + entry.Name()
+		
+		// 타입 확인
+		if typeData, err := ioutil.ReadFile(path + "/type"); err == nil {
+			typeStr := strings.TrimSpace(string(typeData))
+			
+			if typeStr == "USB" {
+				// USB-C PD 전원 확인 - voltage_now와 current_now로 실제 전력 공급 확인
+				if voltageData, err := ioutil.ReadFile(path + "/voltage_now"); err == nil {
+					if currentData, err2 := ioutil.ReadFile(path + "/current_now"); err2 == nil {
+						voltage := strings.TrimSpace(string(voltageData))
+						current := strings.TrimSpace(string(currentData))
+						
+						if voltageVal, err3 := strconv.Atoi(voltage); err3 == nil && voltageVal > 1000000 { // 1V 이상
+							hasActivePower = true
+							powerType = "USB-C 전원"
+						} else if currentVal, err4 := strconv.Atoi(current); err4 == nil && currentVal > 100000 { // 100mA 이상
+							hasActivePower = true
+							powerType = "USB-C 전원"
+						}
+					}
+				}
+				
+				// online 상태도 확인
+				if onlineData, err := ioutil.ReadFile(path + "/online"); err == nil {
+					if strings.TrimSpace(string(onlineData)) == "1" {
+						hasActivePower = true
+						powerType = "USB-C 전원"
+					}
+				}
+			} else if typeStr == "Mains" || typeStr == "USB_PD" {
+				// 일반적인 AC 어댑터 확인
+				if onlineData, err := ioutil.ReadFile(path + "/online"); err == nil {
+					if strings.TrimSpace(string(onlineData)) == "1" {
+						hasActivePower = true
+						if typeStr == "USB_PD" {
+							powerType = "USB-PD 전원"
+						} else {
+							powerType = "AC 전원"
+						}
+					}
+				}
+			} else if typeStr == "Battery" {
+				hasBattery = true
+				if capacityData, err := ioutil.ReadFile(path + "/capacity"); err == nil {
+					batteryLevel = strings.TrimSpace(string(capacityData)) + "%"
+				}
+			}
+		}
+	}
+	
+	// 실제 전력 공급 여부 확인 - 시스템이 켜져 있다는 것은 전원이 공급되고 있다는 뜻
+	if !hasActivePower {
+		// 시스템이 실행 중이므로 어떤 형태로든 전력이 공급되고 있음
+		// USB-C 타입이 감지되었다면 USB-C 전원으로 간주
+		for _, entry := range entries {
+			path := powerSupplyDir + "/" + entry.Name()
+			if typeData, err := ioutil.ReadFile(path + "/type"); err == nil {
+				if strings.TrimSpace(string(typeData)) == "USB" {
+					if usbTypeData, err2 := ioutil.ReadFile(path + "/usb_type"); err2 == nil {
+						if strings.Contains(string(usbTypeData), "PD") {
+							hasActivePower = true
+							powerType = "USB-C PD 전원"
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	if hasActivePower {
+		if hasBattery && batteryLevel != "" {
+			return powerType + " (" + batteryLevel + ")"
+		}
+		return powerType
+	}
+	
+	if hasBattery && batteryLevel != "" {
+		return batteryLevel
+	}
+	
+	// 마지막 수단: 시스템이 실행 중이므로 전원 공급 중
+	return "전원 공급 중"
+}
+
+func getNetworkStatus() string {
+	// nmcli로 연결 상태 확인
+	cmd := exec.Command("nmcli", "device", "status")
+	if output, err := cmd.Output(); err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) >= 3 {
+				deviceName := fields[0]
+				deviceType := fields[1] 
+				state := fields[2]
+				
+				if state == "connected" {
+					if deviceType == "ethernet" {
+						return "유선 연결"
+					} else if deviceType == "wifi" {
+						// WiFi 신호 강도 확인
+						return getWiFiSignalStrengthNmcli(deviceName)
+					}
+				}
+			}
+		}
+	}
+	
+	// 백업: /sys/class/net 디렉토리 확인
+	netDir := "/sys/class/net"
+	if entries, err := os.ReadDir(netDir); err == nil {
+		for _, entry := range entries {
+			ifaceName := entry.Name()
+			if ifaceName == "lo" {
+				continue
+			}
+			
+			ifacePath := netDir + "/" + ifaceName
+			if operData, err := ioutil.ReadFile(ifacePath + "/operstate"); err == nil {
+				if strings.TrimSpace(string(operData)) == "up" {
+					// 유선 연결 확인
+					if strings.HasPrefix(ifaceName, "end") || strings.HasPrefix(ifaceName, "eth") || strings.HasPrefix(ifaceName, "enp") {
+						if carrierData, err := ioutil.ReadFile(ifacePath + "/carrier"); err == nil {
+							if strings.TrimSpace(string(carrierData)) == "1" {
+								return "유선 연결"
+							}
+						}
+					}
+					
+					// WiFi 연결 확인
+					if strings.HasPrefix(ifaceName, "wl") {
+						return getWiFiSignalStrengthNmcli(ifaceName)
+					}
+				}
+			}
+		}
+	}
+	
+	return "연결 없음"
+}
+
+func getWiFiSignalStrengthNmcli(deviceName string) string {
+	// nmcli로 WiFi 신호 강도 확인
+	cmd := exec.Command("nmcli", "device", "wifi", "list", "ifname", deviceName)
+	if output, err := cmd.Output(); err == nil {
+		lines := strings.Split(string(output), "\n")
+		for i, line := range lines {
+			if i == 0 {
+				continue // 헤더 스킵
+			}
+			if strings.Contains(line, "*") { // 현재 연결된 네트워크
+				// 신호 강도는 보통 SIGNAL 컬럼에 있음
+				fields := strings.Fields(line)
+				for j, field := range fields {
+					// 신호 강도를 찾기 (dBm 또는 % 형태)
+					if strings.Contains(field, "%") && j > 0 {
+						if percentage := parsePercentage(field); percentage >= 0 {
+							return getSignalStrengthFromPercentage(percentage)
+						}
+					}
+				}
+				
+				// BSSID 다음에 오는 숫자 필드들 확인 (일반적으로 신호 강도)
+				for j := 2; j < len(fields); j++ {
+					if val, err := strconv.Atoi(fields[j]); err == nil {
+						if val >= 0 && val <= 100 {
+							return getSignalStrengthFromPercentage(val)
+						} else if val <= 0 && val >= -100 {
+							return getSignalStrengthFromDbm(val)
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// 대체 방법: nmcli connection show로 활성 연결 확인
+	cmd = exec.Command("nmcli", "connection", "show", "--active")
+	if output, err := cmd.Output(); err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "wifi") || strings.Contains(line, "802-11-wireless") {
+				fields := strings.Fields(line)
+				if len(fields) > 0 {
+					connName := fields[0]
+					// 연결 세부 정보 확인
+					cmd2 := exec.Command("nmcli", "connection", "show", connName)
+					if output2, err2 := cmd2.Output(); err2 == nil {
+						if signal := parseNmcliSignal(string(output2)); signal != "" {
+							return signal
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return "WiFi 연결"
+}
+
+func parsePercentage(s string) int {
+	s = strings.TrimSuffix(s, "%")
+	if val, err := strconv.Atoi(s); err == nil {
+		return val
+	}
+	return -1
+}
+
+func getSignalStrengthFromPercentage(percentage int) string {
+	if percentage >= 70 {
+		return "WiFi 강함"
+	} else if percentage >= 40 {
+		return "WiFi 보통"
+	} else {
+		return "WiFi 약함"
+	}
+}
+
+func getSignalStrengthFromDbm(dbm int) string {
+	if dbm >= -30 {
+		return "WiFi 강함"
+	} else if dbm >= -60 {
+		return "WiFi 보통"
+	} else {
+		return "WiFi 약함"
+	}
+}
+
+func parseNmcliSignal(output string) string {
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "wireless.signal") || strings.Contains(line, "SIGNAL") {
+			parts := strings.Fields(line)
+			for _, part := range parts {
+				if val, err := strconv.Atoi(part); err == nil {
+					if val >= 0 && val <= 100 {
+						return getSignalStrengthFromPercentage(val)
+					} else if val <= 0 && val >= -100 {
+						return getSignalStrengthFromDbm(val)
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+
+
+func getCPUTemperature() string {
+	// CPU 온도 확인 (여러 경로 시도)
+	tempPaths := []string{
+		"/sys/class/thermal/thermal_zone0/temp",
+		"/sys/class/thermal/thermal_zone1/temp",
+		"/sys/devices/virtual/thermal/thermal_zone0/temp",
+	}
+	
+	for _, path := range tempPaths {
+		if data, err := ioutil.ReadFile(path); err == nil {
+			tempStr := strings.TrimSpace(string(data))
+			if temp, err := strconv.Atoi(tempStr); err == nil {
+				// milli-celsius를 celsius로 변환
+				celsius := temp / 1000
+				return fmt.Sprintf("%d°C", celsius)
+			}
+		}
+	}
+	
+	// sensors 명령어 시도
+	cmd := exec.Command("sensors")
+	if output, err := cmd.Output(); err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "Core 0") || strings.Contains(line, "CPU") {
+				if strings.Contains(line, "°C") {
+					parts := strings.Fields(line)
+					for _, part := range parts {
+						if strings.HasSuffix(part, "°C") {
+							return part
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return "N/A"
+}
+
+func getStorageStatus() string {
+	cmd := exec.Command("df", "-h", "/")
+	output, err := cmd.Output()
+	if err != nil {
+		return "N/A"
+	}
+	
+	lines := strings.Split(string(output), "\n")
+	if len(lines) >= 2 {
+		fields := strings.Fields(lines[1])
+		if len(fields) >= 4 {
+			total := fields[1]  // 전체 용량
+			avail := fields[3]  // 사용 가능 용량
+			return fmt.Sprintf("%s Free / %s", avail, total)
+		}
+	}
+	
+	return "N/A"
+}
+
+
 
