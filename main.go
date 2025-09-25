@@ -124,7 +124,7 @@ func decode(s string, v any) error {
 
 // ---------- WebRTC ----------
 
-func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender, error) {
+func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP, *webrtc.RTPSender, error) {
 	api := webrtc.NewAPI()
 
 	config := webrtc.Configuration{
@@ -135,7 +135,7 @@ func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection
 
 	pc, err := api.NewPeerConnection(config)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("NewPeerConnection: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("NewPeerConnection: %w", err)
 	}
 
 	// H.264 트랙 (RTP 그대로 씁니다)
@@ -145,13 +145,29 @@ func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection
 	)
 	if err != nil {
 		_ = pc.Close()
-		return nil, nil, nil, fmt.Errorf("NewTrackLocalStaticRTP: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("NewTrackLocalStaticRTP video: %w", err)
+	}
+
+	// Opus 오디오 트랙
+	audioTrack, err := webrtc.NewTrackLocalStaticRTP(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+		"audio", "pion",
+	)
+	if err != nil {
+		_ = pc.Close()
+		return nil, nil, nil, nil, fmt.Errorf("NewTrackLocalStaticRTP audio: %w", err)
 	}
 
 	rtpSender, err := pc.AddTrack(videoTrack)
 	if err != nil {
 		_ = pc.Close()
-		return nil, nil, nil, fmt.Errorf("AddTrack: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("AddTrack video: %w", err)
+	}
+	
+	_, err = pc.AddTrack(audioTrack)
+	if err != nil {
+		_ = pc.Close()
+		return nil, nil, nil, nil, fmt.Errorf("AddTrack audio: %w", err)
 	}
 
 	// 브라우저의 RTCP 읽기 루프(에러 나면 종료)
@@ -160,25 +176,25 @@ func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection
 	// 리모트 SDP 설정
 	if err := pc.SetRemoteDescription(*offer); err != nil {
 		_ = pc.Close()
-		return nil, nil, nil, fmt.Errorf("SetRemoteDescription: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("SetRemoteDescription: %w", err)
 	}
 
 	// Answer 생성/설정
 	answer, err := pc.CreateAnswer(nil)
 	if err != nil {
 		_ = pc.Close()
-		return nil, nil, nil, fmt.Errorf("CreateAnswer: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("CreateAnswer: %w", err)
 	}
 	if err := pc.SetLocalDescription(answer); err != nil {
 		_ = pc.Close()
-		return nil, nil, nil, fmt.Errorf("SetLocalDescription: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("SetLocalDescription: %w", err)
 	}
 
 	// ICE 수집 완료 대기 후 반환
 	g := webrtc.GatheringCompletePromise(pc)
 	<-g
 
-	return pc, videoTrack, rtpSender, nil
+	return pc, videoTrack, audioTrack, rtpSender, nil
 }
 
 func readIncomingRTCPPackets(sender *webrtc.RTPSender) {
@@ -206,15 +222,34 @@ func initUDPListener() *net.UDPConn {
 	}
 
 	// 버퍼 여유
-	if err := conn.SetReadBuffer(4 * 1024 * 1024); err != nil {
-		log.Printf("warn: SetReadBuffer failed: %v", err)
-	}
-	if err := conn.SetWriteBuffer(4 * 1024 * 1024); err != nil {
-		log.Printf("warn: SetWriteBuffer failed: %v", err)
-	}
+	if err := conn.SetReadBuffer(4 * 1024 * 1024); err != nil {/* Lines 210-211 omitted */}
+	if err := conn.SetWriteBuffer(4 * 1024 * 1024); err != nil {/* Lines 213-214 omitted */}
 
 	la := conn.LocalAddr().(*net.UDPAddr)
 	log.Printf("UDP listener ready on %s:%d", la.IP.String(), la.Port)
+	return conn
+}
+
+// Audio UDP listener
+func initAudioUDPListener() *net.UDPConn {
+	bindIP := getenvStr("RTP_BIND_IP", "0.0.0.0")
+	port := getenvInt("RTP_AUDIO_PORT", 5006)
+
+	addr := &net.UDPAddr{
+		IP:   net.ParseIP(bindIP),
+		Port: port,
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatalf("failed to bind UDP (audio) %s:%d: %v", bindIP, port, err)
+	}
+
+	// 버퍼 여유
+	if err := conn.SetReadBuffer(1 * 1024 * 1024); err != nil {}
+	if err := conn.SetWriteBuffer(1 * 1024 * 1024); err != nil {}
+
+	la := conn.LocalAddr().(*net.UDPAddr)
+	log.Printf("Audio UDP listener ready on %s:%d", la.IP.String(), la.Port)
 	return conn
 }
 
@@ -377,7 +412,7 @@ func (c *Client) writePump() {
 
 // ---------- ICE 상태 변화 시 정리 ----------
 
-func handleICEConnectionState(pc *webrtc.PeerConnection, gstHandle *exec.Cmd, listener *net.UDPConn, streamInProgress *bool) {
+func handleICEConnectionState(pc *webrtc.PeerConnection, gstHandle *exec.Cmd, listener *net.UDPConn, audioListener *net.UDPConn, streamInProgress *bool) {
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
 		log.Printf("ICE state: %s", s.String())
 
@@ -392,6 +427,9 @@ func handleICEConnectionState(pc *webrtc.PeerConnection, gstHandle *exec.Cmd, li
 			}
 			if listener != nil {
 				_ = listener.Close()
+			}
+			if audioListener != nil {
+				_ = audioListener.Close()
 			}
 			if pc != nil {
 				_ = pc.Close()
@@ -446,16 +484,20 @@ func main() {
 		}
 		log.Println("Received SessionDescription from browser")
 
-		pc, videoTrack, rtpSender, err := initWebRTCSession(&offer)
+		pc, videoTrack, audioTrack, rtpSender, err := initWebRTCSession(&offer)
 		if err != nil {
 			http.Error(w, "Failed to init WebRTC: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		_ = rtpSender // RTCP 루프는 initWebRTCSession 안에서 시작됨
 
-		// UDP 수신(Radxa -> 이 서버)
+		// 비디오 UDP 수신(Radxa -> 이 서버)
 		listener := initUDPListener()
 		go sendRtpToClient(videoTrack, listener)
+		
+		// 오디오 UDP 수신(마이크 -> 이 서버)
+		audioListener := initAudioUDPListener()
+		go sendRtpToClient(audioTrack, audioListener)
 
 		// 기본: 로컬 GStreamer OFF (Radxa가 쏨). 필요 시 ENV로 토글.
 		var gstHandle *exec.Cmd
@@ -463,7 +505,7 @@ func main() {
 			gstHandle = runGstreamerPipeline(gstContext)
 		}
 
-		handleICEConnectionState(pc, gstHandle, listener, &streamInProgress)
+		handleICEConnectionState(pc, gstHandle, listener, audioListener, &streamInProgress)
 		streamInProgress = true
 
 		// SDP answer 반환

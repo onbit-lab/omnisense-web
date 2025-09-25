@@ -1,20 +1,23 @@
 // GIF 로딩 화면 처리
 window.addEventListener('load', function() {
-  // 로딩 사운드 재생
+  // 로딩 사운드 재생 (한 번만 재생)
   const loadingAudio = document.getElementById('loadingAudio');
   
-  // 사용자 상호작용 없이 오디오 재생을 시도 (일부 브라우저에서 제한될 수 있음)
+  // 로딩 사운드는 한 번만 재생되도록 함
   const playLoadingAudio = () => {
+    // loop 속성 제거하여 한 번만 재생되도록 함
+    loadingAudio.loop = false;
+    
     loadingAudio.play().catch(error => {
       console.log('Loading audio autoplay prevented:', error);
-      // 오디오 재생이 차단된 경우, 사용자 클릭 시 재생하도록 설정
+      // 오디오 재생이 차단된 경우, 사용자 클릭 시 재생하도록 설정 (한 번만)
       document.addEventListener('click', () => {
         loadingAudio.play().catch(e => console.log('Audio play failed:', e));
       }, { once: true });
     });
   };
   
-  // 오디오 로드 완료 후 재생
+  // 오디오 로드 완료 후 한 번만 재생
   if (loadingAudio.readyState >= 2) {
     playLoadingAudio();
   } else {
@@ -53,13 +56,17 @@ window.addEventListener('load', function() {
       });
   }
   
-  // 4초 후에 로딩 화면 숨기고 메인 콘텐츠 표시
+  // 8초 후에 로딩 화면 숨기고 메인 콘텐츠 표시
   setTimeout(function() {
-    // 로딩 오디오 정지
+    // 로딩 오디오가 아직 재생 중이면 완전히 정지
     const loadingAudio = document.getElementById('loadingAudio');
     if (loadingAudio) {
       loadingAudio.pause();
       loadingAudio.currentTime = 0;
+      
+      // 이벤트 리스너 제거하여 다시 재생되지 않도록 함
+      loadingAudio.onended = null;
+      loadingAudio.oncanplay = null;
     }
     
     document.getElementById('loadingScreen').classList.add('hidden');
@@ -489,12 +496,19 @@ function initializePeerConnection() {
     el.autoplay = true;
     el.controls = false;
 
-    // 비디오 placeholder 제거하고 영상 추가
-    const videoPlayer = document.getElementById('remoteVideo');
-    videoPlayer.innerHTML = '';
-    videoPlayer.appendChild(el);
+    if (event.track.kind === 'video') {
+      // 비디오 placeholder 제거하고 영상 추가
+      const videoPlayer = document.getElementById('remoteVideo');
+      videoPlayer.innerHTML = '';
+      videoPlayer.appendChild(el);
+      log('Video stream connected successfully');
+    } else if (event.track.kind === 'audio') {
+      // 오디오 요소 추가 (비디오 컨테이너에)
+      const videoPlayer = document.getElementById('remoteVideo');
+      videoPlayer.appendChild(el);
+      log('Audio stream connected successfully');
+    }
     
-    log('Video stream connected successfully');
     updateStreamStatus('스트리밍이 연결되었습니다');
   };
 
@@ -509,8 +523,9 @@ function initializePeerConnection() {
     }
   };
 
-  // Offer to receive 1 video track
+  // Offer to receive both video and audio tracks
   newPc.addTransceiver('video', {'direction': 'recvonly'});
+  newPc.addTransceiver('audio', {'direction': 'recvonly'});
   newPc.createOffer().then(d => newPc.setLocalDescription(d)).catch(log);
 
   return newPc;
