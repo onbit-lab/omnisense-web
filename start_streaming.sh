@@ -5,13 +5,13 @@ set -e
 
 echo "Starting video and audio streaming..."
 
-# Get the server's IP address automatically
-HOST="$(hostname -I | awk '{print $1}')"
+# Use localhost for reliable local streaming
+HOST="127.0.0.1"
 export HOST  # Export so it's passed to child scripts
 VIDEO_PORT=5004
 AUDIO_PORT=5006
 
-echo "Using server address: $HOST"
+echo "Using server address: $HOST (localhost)"
 
 # Start video stream in background
 echo "Starting video stream..."

@@ -11,102 +11,55 @@ function initializeLanguageSystem() {
   document.documentElement.lang = savedLanguage === 'ko' ? 'ko' : 'en';
 }
 
-// GIF 로딩 화면 처리
 window.addEventListener('load', function() {
-  // 로딩 사운드 제거 - 더 이상 사용하지 않음
-  
-  // 언어 시스템 초기화 (가장 먼저)
   initializeLanguageSystem();
-  
-  // 접근성 기능 초기화
   initAccessibilityFeatures();
-  
-
-  
-  // 시스템 상태 업데이트 시작
   startSystemStatusUpdates();
-  
-  // 해시 변경 이벤트 처리
   initHashNavigation();
   
-  // PWA 설치 프롬프트 처리
   let deferredPrompt;
   
   window.addEventListener('beforeinstallprompt', (e) => {
-    console.log('PWA: Install prompt available');
     e.preventDefault();
     deferredPrompt = e;
-    
-    // PWA 설치 버튼 표시 (선택사항)
     showInstallButton();
   });
   
-  // PWA 설치 완료 감지
   window.addEventListener('appinstalled', (evt) => {
-    console.log('PWA: App installed successfully');
     log('앱이 성공적으로 설치되었습니다!');
   });
   
-  // Service Worker 등록
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
-      .then(registration => {
-        console.log('PWA: Service Worker registered', registration);
-      })
-      .catch(error => {
-        console.log('PWA: Service Worker registration failed', error);
-      });
+      .then(registration => console.log('SW registered'))
+      .catch(error => console.log('SW registration failed'));
   }
   
-  // 로딩 화면 즉시 표시하고, 2초 후에 메인 콘텐츠와 네비게이션 바 표시
   setTimeout(function() {    
     document.getElementById('loadingScreen').classList.add('hidden');
     document.getElementById('main-content').classList.add('show');
-    // 네비게이션 바 표시 (hidden 클래스 제거)
     document.getElementById('mainNav').classList.remove('hidden');
-    // 접근성 버튼 표시 (인트로 후)
     document.getElementById('accessibilityToggle').classList.remove('hidden');
-    // 메인 콘텐츠에 포커스 설정 (스크린 리더 사용자를 위해)
     document.getElementById('main-content').focus();
-  }, 2000); // 2초 동안만 GIF 표시 (더 빠르게 표시)
+  }, 2000);
   
-  // WebSocket 자막 연결 초기화
   connectWebSocket();
   
-  // 페이지 종료 시 즉시 정리
-  window.addEventListener('beforeunload', function(e) {
+  const cleanup = () => {
     if (isStreaming || pc) {
-      // WebRTC 연결 즉시 정리
       cleanupWebRTC();
-      
-      // 서버에 즉시 정리 요청 (백그라운드에서 확실히 전송)
-      navigator.sendBeacon('/reset', new Blob([''], { type: 'application/json' }));
+      navigator.sendBeacon('/reset', '');
     }
-  });
+  };
   
-  // 페이지 숨김/탭 전환 시에도 즉시 정리
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'hidden' && (isStreaming || pc)) {
-      log('페이지 숨김 - 스트림 즉시 정리');
-      cleanupWebRTC();
-      
-      // sendBeacon으로 확실한 전송 보장
-      navigator.sendBeacon('/reset', new Blob([''], { type: 'application/json' }));
-    }
+  window.addEventListener('beforeunload', cleanup);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') cleanup();
   });
-  
-  // 브라우저 창 포커스 잃을 때도 정리 (추가 안전장치)
-  window.addEventListener('blur', function() {
-    if (isStreaming || pc) {
-      // 일정 시간 후에도 포커스가 없으면 정리
-      setTimeout(function() {
-        if (document.visibilityState === 'hidden' && (isStreaming || pc)) {
-          log('창 포커스 없음 - 스트림 정리');
-          cleanupWebRTC();
-          navigator.sendBeacon('/reset', new Blob([''], { type: 'application/json' }));
-        }
-      }, 2000); // 2초 후 확인
-    }
+  window.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (document.visibilityState === 'hidden') cleanup();
+    }, 2000);
   });
 });
 
@@ -218,28 +171,19 @@ function applyFontSize(size) {
 }
 
 function applyContrast(contrast) {
-  document.body.classList.remove('high-contrast');
-  if (contrast === 'high') {
-    document.body.classList.add('high-contrast');
-  }
+  document.body.classList.toggle('high-contrast', contrast === 'high');
 }
 
 function applyReducedMotion(enabled) {
-  if (enabled) {
-    document.documentElement.style.setProperty('--animation-duration', '0.01ms');
-    document.documentElement.style.setProperty('--transition-duration', '0.01ms');
-  } else {
-    document.documentElement.style.removeProperty('--animation-duration');
-    document.documentElement.style.removeProperty('--transition-duration');
-  }
+  const duration = enabled ? '0.01ms' : '';
+  document.documentElement.style.setProperty('--animation-duration', duration);
+  document.documentElement.style.setProperty('--transition-duration', duration);
 }
 
 function applyScreenReaderMode(enabled) {
   document.body.classList.toggle('screen-reader-mode', enabled);
-  
-  // 스크린 리더 모드에서 추가 설명 제공
   if (enabled) {
-    announceToScreenReader('스크린 리더 모드가 활성화되었습니다. 추가 설명이 제공됩니다.');
+    announceToScreenReader('스크린 리더 모드가 활성화되었습니다.');
   }
 }
 
@@ -557,16 +501,27 @@ function updateUIForStreamingState(streamingActive) {
 
 // PeerConnection 초기화 함수
 function initializePeerConnection() {
-  // 기본 WebRTC 설정
+  // localhost 접속 감지 (더 정확한 감지)
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || 
+                     hostname === '127.0.0.1' ||
+                     hostname === '::1' ||
+                     hostname.startsWith('192.168.') ||
+                     hostname.startsWith('10.') ||
+                     hostname.startsWith('172.');
+  
+  // localhost/내부망인 경우 STUN 서버 없이 직접 연결
   const config = {
-    iceServers: [{
-      urls: ['stun:stun.l.google.com:19302']
-    }],
-    iceCandidatePoolSize: 10,
+    iceServers: isLocalhost ? [] : [
+      { urls: 'stun:stun.l.google.com:19302' }
+    ],
+    iceCandidatePoolSize: isLocalhost ? 0 : 10,
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
     iceTransportPolicy: 'all'
   };
+  
+  log(isLocalhost ? `Local network detected (${hostname}) - using direct connection` : `Remote connection (${hostname}) - using STUN server`);
 
   const newPc = new RTCPeerConnection(config);
 
@@ -696,33 +651,27 @@ function connectWebSocket() {
       const subtitleData = JSON.parse(event.data);
       updateSubtitleOverlay(subtitleData);
     } catch (error) {
-      console.error('Error parsing subtitle data:', error);
+      console.error('Subtitle parsing error:', error);
     }
   };
   
   ws.onclose = function(event) {
-    if (event.wasClean) {
-      log('WebSocket closed cleanly');
-      return;
+    if (!event.wasClean) {
+      log('WebSocket disconnected unexpectedly');
     }
     
     if (wsReconnectAttempts < maxReconnectAttempts) {
       wsReconnectAttempts++;
-      const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts - 1), 10000); // 지수 백오프, 최대 10초
-      log(`WebSocket disconnected. Reconnecting in ${delay/1000}s... (attempt ${wsReconnectAttempts}/${maxReconnectAttempts})`);
-      
-      setTimeout(() => {
-        connectWebSocket();
-      }, delay);
+      const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000);
+      log(`WebSocket reconnecting in ${delay}ms (attempt ${wsReconnectAttempts}/${maxReconnectAttempts})`);
+      setTimeout(connectWebSocket, delay);
     } else {
       log('WebSocket reconnection failed after maximum attempts');
-      announceToScreenReader('자막 서비스 재연결에 실패했습니다');
     }
   };
   
   ws.onerror = function(error) {
     console.error('WebSocket error:', error);
-    log('WebSocket connection error');
   };
 }
 
@@ -781,18 +730,8 @@ function hideSubtitleOverlay() {
   }
 }
 
-// Navigation functionality
 document.addEventListener('DOMContentLoaded', function() {
-  // PeerConnection 초기화
   pc = initializePeerConnection();
-  
-  // WebSocket 연결
-  connectWebSocket();
-  
-  // Show navigation after loading screen
-  setTimeout(function() {
-    document.getElementById('mainNav').classList.remove('hidden');
-  }, 8000); // 8초 후 네비게이션 표시
   
   // Navigation toggle for mobile
   const navToggle = document.getElementById('navToggle');
@@ -943,10 +882,6 @@ let subtitleTimeout;
 let log = msg => {
   const timestamp = new Date().toLocaleTimeString();
   document.getElementById('logs').innerHTML += `[${timestamp}] ${msg}<br>`;
-  
-  // 스크린 리더에 로그 알림
-  announceToScreenReader(`로그: ${msg}`);
-  // 자동 스크롤
   const logsElement = document.getElementById('logs');
   logsElement.scrollTop = logsElement.scrollHeight;
 }
@@ -956,41 +891,27 @@ function updateStreamStatus(message) {
   statusElement.textContent = message;
 }
 
-// 사용자에게 오류 메시지 표시
 function showErrorMessage(message) {
-  // 콘솔에 로그 기록
   log('ERROR: ' + message);
-  
-  // 스트림 상태 업데이트
   updateStreamStatus(message);
   
-  // 경고 알림 표시
+  const existingError = document.querySelector('.error-message');
+  if (existingError) existingError.remove();
+  
   const errorBox = document.createElement('div');
   errorBox.className = 'error-message';
   errorBox.textContent = message;
   
-  // 기존 에러 메시지가 있다면 제거
-  const existingError = document.querySelector('.error-message');
-  if (existingError) {
-    existingError.remove();
-  }
-  
-  // 비디오 플레이어 컨테이너에 에러 메시지 표시
   const videoContainer = document.querySelector('.video-container');
   if (videoContainer) {
     videoContainer.appendChild(errorBox);
-  }
-  
-  // 화면 읽기 기능을 위한 알림
-  announceToScreenReader(message);
-  
-  // 5초 후 메시지 자동 제거
-  setTimeout(() => {
-    if (errorBox.parentNode) {
+    setTimeout(() => {
       errorBox.classList.add('fade-out');
       setTimeout(() => errorBox.remove(), 500);
-    }
-  }, 5000);
+    }, 5000);
+  }
+  
+  announceToScreenReader(message);
 }
 
 document.getElementById('viewCamera').addEventListener('click', function() {
@@ -1336,35 +1257,261 @@ function startSystemStatusUpdates() {
   // 즉시 한 번 업데이트
   updateSystemStatus();
   
-  // 30초마다 시스템 상태 업데이트
-  setInterval(updateSystemStatus, 30000);
+  // 10초마다 시스템 상태 업데이트
+  setInterval(updateSystemStatus, 10000);
 }
 
 // 시스템 상태 업데이트
 async function updateSystemStatus() {
   try {
-    const response = await fetch('/status');
-    if (response.ok) {
-      const status = await response.json();
-      
-      // DOM 요소 업데이트
-      const batteryValue = document.querySelector('.status-card:nth-child(1) .status-value');
-      const signalValue = document.querySelector('.status-card:nth-child(2) .status-value');
-      const tempValue = document.querySelector('.status-card:nth-child(3) .status-value');
-      const storageValue = document.querySelector('.status-card:nth-child(4) .status-value');
-      
-      if (batteryValue) batteryValue.textContent = status.battery;
-      if (signalValue) signalValue.textContent = status.signal;
-      if (tempValue) tempValue.textContent = status.temperature;
-      if (storageValue) storageValue.textContent = status.storage;
-      
-      log('시스템 상태 업데이트 완료');
-    } else {
-      log('시스템 상태 업데이트 실패: ' + response.status);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch('/status', {
+      signal: controller.signal,
+      cache: 'no-cache'
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+    
+    const status = await response.json();
+    
+    updateStatusDisplay('battery', status.battery);
+    updateStatusDisplay('signal', status.signal);
+    updateStatusDisplay('temperature', status.temperature);
+    updateStatusDisplay('storage', status.storage);
+    
+    announceImportantStatusChanges(status);
+    
   } catch (error) {
-    log('시스템 상태 업데이트 오류: ' + error.message);
+    if (error.name === 'AbortError') {
+      console.warn('Status update timeout');
+    } else {
+      console.warn('Status update failed:', error.message);
+    }
+    
+    updateStatusDisplay('battery', 'N/A');
+    updateStatusDisplay('signal', 'N/A');
+    updateStatusDisplay('temperature', 'N/A');
+    updateStatusDisplay('storage', 'N/A');
   }
+}
+
+// 개별 상태 표시 업데이트 함수
+function updateStatusDisplay(type, value) {
+  const statusCards = document.querySelectorAll('.status-card');
+  
+  statusCards.forEach((card, index) => {
+    const label = card.querySelector('.status-label');
+    const valueElement = card.querySelector('.status-value');
+    
+    if (!label || !valueElement) return;
+    
+    const labelText = label.textContent.toLowerCase();
+    let shouldUpdate = false;
+    
+    // 타입별 매칭 확인
+    switch (type) {
+      case 'battery':
+        shouldUpdate = labelText.includes('battery') || labelText.includes('배터리') || index === 0;
+        break;
+      case 'signal':
+        shouldUpdate = labelText.includes('signal') || labelText.includes('신호') || index === 1;
+        break;
+      case 'temperature':
+        shouldUpdate = labelText.includes('temperature') || labelText.includes('온도') || index === 2;
+        break;
+      case 'storage':
+        shouldUpdate = labelText.includes('storage') || labelText.includes('저장') || index === 3;
+        break;
+    }
+    
+    if (shouldUpdate) {
+      const previousValue = valueElement.textContent;
+      
+      // 강제 업데이트 - 값을 항상 설정
+      valueElement.textContent = value;
+      valueElement.setAttribute('title', value);
+      
+      // DOM 강제 리플로우
+      valueElement.offsetHeight;
+      
+      // 상태 변화 애니메이션 - 항상 실행
+      card.classList.remove('status-updated');
+      void card.offsetWidth; // 강제 리플로우
+      card.classList.add('status-updated');
+      setTimeout(() => {
+        card.classList.remove('status-updated');
+      }, 1000);
+      
+      // 상태에 따른 시각적 피드백 강제 업데이트
+      updateStatusVisuals(card, type, value);
+      
+      // 추가 강제 렌더링
+      requestAnimationFrame(() => {
+        valueElement.style.transform = 'scale(1.05)';
+        requestAnimationFrame(() => {
+          valueElement.style.transform = 'scale(1)';
+        });
+      });
+    }
+  });
+}
+
+// 상태에 따른 시각적 피드백 업데이트
+function updateStatusVisuals(card, type, value) {
+  // 기존 상태 클래스 제거
+  card.classList.remove('status-good', 'status-warning', 'status-error');
+  
+  const valueStr = value.toLowerCase();
+  
+  switch (type) {
+    case 'battery':
+      if (valueStr.includes('n/a') || valueStr.includes('없음')) {
+        card.classList.add('status-error');
+      } else if (valueStr.includes('전원') || valueStr.includes('충전') || valueStr.match(/\d+%/)) {
+        card.classList.add('status-good');
+      } else {
+        card.classList.add('status-warning');
+      }
+      break;
+      
+    case 'signal':
+      if (valueStr.includes('강함') || valueStr.includes('유선') || valueStr.includes('strong')) {
+        card.classList.add('status-good');
+      } else if (valueStr.includes('보통') || valueStr.includes('medium')) {
+        card.classList.add('status-warning');
+      } else if (valueStr.includes('약함') || valueStr.includes('없음') || valueStr.includes('n/a') || valueStr.includes('weak')) {
+        card.classList.add('status-error');
+      } else {
+        card.classList.add('status-good');
+      }
+      break;
+      
+    case 'temperature':
+      if (valueStr.includes('n/a')) {
+        card.classList.add('status-error');
+      } else {
+        const tempMatch = valueStr.match(/(\d+)°c/);
+        if (tempMatch) {
+          const temp = parseInt(tempMatch[1]);
+          if (temp < 60) {
+            card.classList.add('status-good');
+          } else if (temp < 80) {
+            card.classList.add('status-warning');
+          } else {
+            card.classList.add('status-error');
+          }
+        } else {
+          card.classList.add('status-good');
+        }
+      }
+      break;
+      
+    case 'storage':
+      if (valueStr.includes('n/a')) {
+        card.classList.add('status-error');
+      } else {
+        // 사용 가능 용량 확인 (예: "5.2G Free / 15G")
+        const freeMatch = valueStr.match(/(\d+(?:\.\d+)?)[gtmk]?\s*free/i);
+        if (freeMatch) {
+          const free = parseFloat(freeMatch[1]);
+          const unit = valueStr.match(/(\d+(?:\.\d+)?)([gtmk])\s*free/i);
+          let freeGB = free;
+          
+          if (unit && unit[2]) {
+            switch (unit[2].toLowerCase()) {
+              case 't': freeGB = free * 1024; break;
+              case 'g': freeGB = free; break;
+              case 'm': freeGB = free / 1024; break;
+              case 'k': freeGB = free / (1024 * 1024); break;
+            }
+          }
+          
+          if (freeGB > 5) {
+            card.classList.add('status-good');
+          } else if (freeGB > 1) {
+            card.classList.add('status-warning');
+          } else {
+            card.classList.add('status-error');
+          }
+        } else {
+          card.classList.add('status-good');
+        }
+      }
+      break;
+  }
+}
+
+// 중요한 상태 변경 알림
+let lastImportantStatus = {};
+
+function announceImportantStatusChanges(status) {
+  // 배터리 상태 변경
+  if (status.battery && status.battery !== lastImportantStatus.battery) {
+    const batteryStr = status.battery.toLowerCase();
+    if (batteryStr.includes('없음') || batteryStr.includes('n/a')) {
+      announceToScreenReader('경고: 배터리 정보를 확인할 수 없습니다');
+    }
+  }
+  
+  // 네트워크 연결 상태 변경
+  if (status.signal && status.signal !== lastImportantStatus.signal) {
+    const signalStr = status.signal.toLowerCase();
+    if (signalStr.includes('없음') || signalStr.includes('n/a')) {
+      announceToScreenReader('경고: 네트워크 연결이 끊어졌습니다');
+    } else if (signalStr.includes('약함')) {
+      announceToScreenReader('알림: 네트워크 신호가 약합니다');
+    } else if (signalStr.includes('강함') || signalStr.includes('유선')) {
+      announceToScreenReader('알림: 네트워크 연결이 양호합니다');
+    }
+  }
+  
+  // 온도 과열 경고
+  if (status.temperature && status.temperature !== lastImportantStatus.temperature) {
+    const tempMatch = status.temperature.match(/(\d+)°c/i);
+    if (tempMatch) {
+      const temp = parseInt(tempMatch[1]);
+      const lastTempMatch = lastImportantStatus.temperature ? lastImportantStatus.temperature.match(/(\d+)°c/i) : null;
+      const lastTemp = lastTempMatch ? parseInt(lastTempMatch[1]) : 0;
+      
+      if (temp >= 80 && lastTemp < 80) {
+        announceToScreenReader('경고: 디바이스 온도가 높습니다');
+      } else if (temp < 60 && lastTemp >= 60) {
+        announceToScreenReader('알림: 디바이스 온도가 안전한 수준으로 돌아왔습니다');
+      }
+    }
+  }
+  
+  // 저장 공간 경고
+  if (status.storage && status.storage !== lastImportantStatus.storage) {
+    const freeMatch = status.storage.match(/(\d+(?:\.\d+)?)[gtmk]?\s*free/i);
+    if (freeMatch) {
+      const free = parseFloat(freeMatch[1]);
+      const unit = status.storage.match(/(\d+(?:\.\d+)?)([gtmk])\s*free/i);
+      let freeGB = free;
+      
+      if (unit && unit[2]) {
+        switch (unit[2].toLowerCase()) {
+          case 't': freeGB = free * 1024; break;
+          case 'g': freeGB = free; break;
+          case 'm': freeGB = free / 1024; break;
+          case 'k': freeGB = free / (1024 * 1024); break;
+        }
+      }
+      
+      if (freeGB < 1) {
+        announceToScreenReader('경고: 저장 공간이 부족합니다');
+      }
+    }
+  }
+  
+  // 상태 저장 (다음 비교를 위해)
+  lastImportantStatus = { ...status };
 }
 
 // 해시 네비게이션 초기화

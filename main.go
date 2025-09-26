@@ -134,30 +134,42 @@ func decode(s string, v any) error {
 
 // ---------- WebRTC ----------
 
-func initWebRTCSession(offer *webrtc.SessionDescription) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP, error) {
-	log.Printf("Initializing WebRTC session")
+func initWebRTCSession(offer *webrtc.SessionDescription, isLocalhost bool) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP, error) {
+	log.Printf("Initializing WebRTC session (localhost: %t)", isLocalhost)
 	
-	// 내부망 지원을 위한 간단한 설정
-	s := webrtc.SettingEngine{}
-	
-	// 서버 IP를 호스트 후보로 등록 (내부망 연결 지원)
-	serverIP := getLocalIP()
-	if serverIP != "127.0.0.1" {
-		s.SetNAT1To1IPs([]string{serverIP}, webrtc.ICECandidateTypeHost)
-		log.Printf("Server IP %s registered for LAN connections", serverIP)
+	// localhost/내부망 접속인 경우 STUN 서버 없이 직접 연결
+	var iceServers []webrtc.ICEServer
+	if !isLocalhost {
+		iceServers = []webrtc.ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		}
 	}
 	
-	api := webrtc.NewAPI(webrtc.WithSettingEngine(s))
-	
+	// localhost 환경에 최적화된 설정
 	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{{
-			URLs: []string{"stun:stun.l.google.com:19302"},
-		}},
+		ICEServers:         iceServers,
 		ICETransportPolicy: webrtc.ICETransportPolicyAll,
 		BundlePolicy:       webrtc.BundlePolicyMaxBundle,
 	}
-
-	pc, err := api.NewPeerConnection(config)
+	
+	// localhost인 경우 추가 최적화 설정
+	var s webrtc.SettingEngine
+	if isLocalhost {
+		// 로컬 연결용 포트 범위 제한
+		s.SetEphemeralUDPPortRange(50000, 50100)
+		// 네트워크 인터페이스 필터링
+		s.SetIncludeLoopbackCandidate(true)
+	}
+	
+	var pc *webrtc.PeerConnection
+	var err error
+	if isLocalhost {
+		api := webrtc.NewAPI(webrtc.WithSettingEngine(s))
+		pc, err = api.NewPeerConnection(config)
+	} else {
+		pc, err = webrtc.NewPeerConnection(config)
+	}
+	
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewPeerConnection: %w", err)
 	}
@@ -365,7 +377,6 @@ func setupPeerConnection(pc *webrtc.PeerConnection, cleanup func()) {
 		}
 	}
 
-	// 즉시 정리를 위한 상태 모니터링
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
 		log.Printf("Connection: %s", s.String())
 		switch s {
@@ -409,15 +420,14 @@ func main() {
 
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		clientIP := getClientIP(r)
-		log.Printf("Stream request from client: %s", clientIP)
+		log.Printf("Stream request received")
 		
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		if streamInProgress {
-			log.Printf("Stream blocked - already in progress (from %s)", clientIP)
+			log.Printf("Stream blocked - already in progress")
 			http.Error(w, "Stream already in progress", http.StatusServiceUnavailable)
 			return
 		}
@@ -434,9 +444,18 @@ func main() {
 			http.Error(w, "Bad offer", http.StatusBadRequest)
 			return
 		}
-		log.Printf("Received offer from %s", clientIP)
+		log.Printf("Received offer")
 
-		pc, videoTrack, audioTrack, err := initWebRTCSession(&offer)
+		// localhost/내부망 접속 감지
+		host := r.Host
+		isLocalhost := strings.Contains(host, "localhost") || 
+					   strings.Contains(host, "127.0.0.1") ||
+					   strings.Contains(host, "::1") ||
+					   strings.Contains(host, "192.168.") ||
+					   strings.Contains(host, "10.") ||
+					   strings.Contains(host, "172.")
+
+		pc, videoTrack, audioTrack, err := initWebRTCSession(&offer, isLocalhost)
 		if err != nil {
 			http.Error(w, "WebRTC failed: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -469,12 +488,12 @@ func main() {
 			videoListener.Close()
 			audioListener.Close()
 			pc.Close()
-			log.Printf("Stream resources cleaned up for %s", clientIP)
+			log.Printf("Stream resources cleaned up")
 		})
 
 		// SDP answer 반환
 		fmt.Fprint(w, encode(pc.LocalDescription()))
-		log.Printf("Stream started for %s (elapsed=%s)", clientIP, time.Since(start))
+		log.Printf("Stream started (elapsed=%s)", time.Since(start))
 	})
 
 	// Reset endpoint to clear stream state in case of issues
@@ -532,49 +551,16 @@ func main() {
 
 	port := getenvInt("HTTP_PORT", 8080)
 	addr := ":" + strconv.Itoa(port)
-	localIP := getLocalIP()
 	
 	log.Printf("🚀 OMNISENSE Server starting...")
-	log.Printf("📍 Local access: http://localhost:%d", port)
-	log.Printf("🌐 Network access: http://%s:%d", localIP, port)
-	log.Printf("📺 WebRTC server IP: %s (for LAN connections)", localIP)
+	log.Printf("📍 Server: http://localhost:%d", port)
 	
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal("HTTP Server error: ", err)
 	}
 }
 
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "127.0.0.1"
-	}
-	
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipv4 := ipnet.IP.To4(); ipv4 != nil {
-				return ipv4.String()
-			}
-		}
-	}
-	return "127.0.0.1"
-}
 
-func getClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if idx := strings.Index(xff, ","); idx > 0 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return xff
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
-	}
-	if ip, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return ip
-	}
-	return r.RemoteAddr
-}
 
 func getSystemStatus() SystemStatus {
 	status := SystemStatus{
@@ -743,99 +729,16 @@ func getNetworkStatus() string {
 }
 
 func getWiFiSignalStrengthNmcli(deviceName string) string {
-	// nmcli로 WiFi 신호 강도 확인
 	cmd := exec.Command("nmcli", "device", "wifi", "list", "ifname", deviceName)
 	if output, err := cmd.Output(); err == nil {
 		lines := strings.Split(string(output), "\n")
 		for i, line := range lines {
-			if i == 0 {
-				continue // 헤더 스킵
+			if i == 0 || !strings.Contains(line, "*") {
+				continue
 			}
-			if strings.Contains(line, "*") { // 현재 연결된 네트워크
-				// 신호 강도는 보통 SIGNAL 컬럼에 있음
-				fields := strings.Fields(line)
-				for j, field := range fields {
-					// 신호 강도를 찾기 (dBm 또는 % 형태)
-					if strings.Contains(field, "%") && j > 0 {
-						if percentage := parsePercentage(field); percentage >= 0 {
-							return getSignalStrengthFromPercentage(percentage)
-						}
-					}
-				}
-				
-				// BSSID 다음에 오는 숫자 필드들 확인 (일반적으로 신호 강도)
-				for j := 2; j < len(fields); j++ {
-					if val, err := strconv.Atoi(fields[j]); err == nil {
-						if val >= 0 && val <= 100 {
-							return getSignalStrengthFromPercentage(val)
-						} else if val <= 0 && val >= -100 {
-							return getSignalStrengthFromDbm(val)
-						}
-					}
-				}
-			}
-		}
-	}
-	
-	// 대체 방법: nmcli connection show로 활성 연결 확인
-	cmd = exec.Command("nmcli", "connection", "show", "--active")
-	if output, err := cmd.Output(); err == nil {
-		lines := strings.Split(string(output), "\n")
-		for _, line := range lines {
-			if strings.Contains(line, "wifi") || strings.Contains(line, "802-11-wireless") {
-				fields := strings.Fields(line)
-				if len(fields) > 0 {
-					connName := fields[0]
-					// 연결 세부 정보 확인
-					cmd2 := exec.Command("nmcli", "connection", "show", connName)
-					if output2, err2 := cmd2.Output(); err2 == nil {
-						if signal := parseNmcliSignal(string(output2)); signal != "" {
-							return signal
-						}
-					}
-				}
-			}
-		}
-	}
-	
-	return "WiFi 연결"
-}
-
-func parsePercentage(s string) int {
-	s = strings.TrimSuffix(s, "%")
-	if val, err := strconv.Atoi(s); err == nil {
-		return val
-	}
-	return -1
-}
-
-func getSignalStrengthFromPercentage(percentage int) string {
-	if percentage >= 70 {
-		return "WiFi 강함"
-	} else if percentage >= 40 {
-		return "WiFi 보통"
-	} else {
-		return "WiFi 약함"
-	}
-}
-
-func getSignalStrengthFromDbm(dbm int) string {
-	if dbm >= -30 {
-		return "WiFi 강함"
-	} else if dbm >= -60 {
-		return "WiFi 보통"
-	} else {
-		return "WiFi 약함"
-	}
-}
-
-func parseNmcliSignal(output string) string {
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "wireless.signal") || strings.Contains(line, "SIGNAL") {
-			parts := strings.Fields(line)
-			for _, part := range parts {
-				if val, err := strconv.Atoi(part); err == nil {
+			fields := strings.Fields(line)
+			for j := 2; j < len(fields); j++ {
+				if val, err := strconv.Atoi(fields[j]); err == nil {
 					if val >= 0 && val <= 100 {
 						return getSignalStrengthFromPercentage(val)
 					} else if val <= 0 && val >= -100 {
@@ -845,7 +748,25 @@ func parseNmcliSignal(output string) string {
 			}
 		}
 	}
-	return ""
+	return "WiFi 연결"
+}
+
+func getSignalStrengthFromPercentage(percentage int) string {
+	if percentage >= 70 {
+		return "WiFi 강함"
+	} else if percentage >= 40 {
+		return "WiFi 보통"
+	}
+	return "WiFi 약함"
+}
+
+func getSignalStrengthFromDbm(dbm int) string {
+	if dbm >= -30 {
+		return "WiFi 강함"
+	} else if dbm >= -60 {
+		return "WiFi 보통"
+	}
+	return "WiFi 약함"
 }
 
 
