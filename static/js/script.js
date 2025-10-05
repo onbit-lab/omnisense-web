@@ -681,6 +681,7 @@ function updateSubtitleOverlay(subtitleData) {
   const langCode = document.getElementById('subtitleLangCode');
   const timestamp = document.getElementById('subtitleTimestamp');
   const text = document.getElementById('subtitleText');
+  const speaker = document.getElementById('subtitleSpeaker');
   
   // 스트리밍 중이 아니면 자막을 표시하지 않음
   if (!subtitleBox || !subtitleData.text.trim() || !isStreaming) {
@@ -690,9 +691,10 @@ function updateSubtitleOverlay(subtitleData) {
   // 자막 데이터 업데이트
   emoji.textContent = subtitleData.emoji || '🙂';
   langCode.textContent = subtitleData.lang_code || 'KR';
-  timestamp.textContent = `${subtitleData.timestamp.toFixed(1)}s`;
+  timestamp.textContent = subtitleData.timestamp || '00:00:00';
   text.textContent = subtitleData.text;
-  
+  speaker.textContent = subtitleData.speaker ? `Speaker ${subtitleData.speaker}` : 'Detecting...';
+
   // 자막 박스 표시 (스트리밍 중인 경우에만)
   if (isStreaming) {
     subtitleBox.style.display = 'block';

@@ -25,13 +25,14 @@ import (
 // ---------- Subtitle structures ----------
 
 type SubtitleData struct {
-	Text      string  `json:"text"`
-	Emotion   string  `json:"emotion"`
-	Language  string  `json:"language"`
-	Timestamp float64 `json:"timestamp"`
-	IsFinal   bool    `json:"is_final"`
-	Emoji     string  `json:"emoji"`
-	LangCode  string  `json:"lang_code"`
+	Text      string `json:"text"`
+	Emotion   string `json:"emotion"`
+	Language  string `json:"language"`
+	Timestamp string `json:"timestamp"`
+	Speaker   int    `json:"speaker"`
+	IsFinal   bool   `json:"is_final"`
+	Emoji     string `json:"emoji"`
+	LangCode  string `json:"lang_code"`
 }
 
 type SystemStatus struct {
@@ -136,7 +137,7 @@ func decode(s string, v any) error {
 
 func initWebRTCSession(offer *webrtc.SessionDescription, isLocalhost bool) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP, error) {
 	log.Printf("Initializing WebRTC session (localhost: %t)", isLocalhost)
-	
+
 	// localhost/내부망 접속인 경우 STUN 서버 없이 직접 연결
 	var iceServers []webrtc.ICEServer
 	if !isLocalhost {
@@ -144,14 +145,14 @@ func initWebRTCSession(offer *webrtc.SessionDescription, isLocalhost bool) (*web
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		}
 	}
-	
+
 	// localhost 환경에 최적화된 설정
 	config := webrtc.Configuration{
 		ICEServers:         iceServers,
 		ICETransportPolicy: webrtc.ICETransportPolicyAll,
 		BundlePolicy:       webrtc.BundlePolicyMaxBundle,
 	}
-	
+
 	// localhost인 경우 추가 최적화 설정
 	var s webrtc.SettingEngine
 	if isLocalhost {
@@ -160,7 +161,7 @@ func initWebRTCSession(offer *webrtc.SessionDescription, isLocalhost bool) (*web
 		// 네트워크 인터페이스 필터링
 		s.SetIncludeLoopbackCandidate(true)
 	}
-	
+
 	var pc *webrtc.PeerConnection
 	var err error
 	if isLocalhost {
@@ -169,7 +170,7 @@ func initWebRTCSession(offer *webrtc.SessionDescription, isLocalhost bool) (*web
 	} else {
 		pc, err = webrtc.NewPeerConnection(config)
 	}
-	
+
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewPeerConnection: %w", err)
 	}
@@ -219,8 +220,6 @@ func initWebRTCSession(offer *webrtc.SessionDescription, isLocalhost bool) (*web
 	return pc, videoTrack, audioTrack, nil
 }
 
-
-
 // ---------- UDP(RTP) ----------
 
 func initUDPListener(portEnv string, defaultPort int, label string) (*net.UDPConn, error) {
@@ -228,7 +227,7 @@ func initUDPListener(portEnv string, defaultPort int, label string) (*net.UDPCon
 		IP:   net.ParseIP(getenvStr("RTP_BIND_IP", "0.0.0.0")),
 		Port: getenvInt(portEnv, defaultPort),
 	}
-	
+
 	lc := &net.ListenConfig{
 		Control: func(network, address string, c syscall.RawConn) error {
 			var err error
@@ -238,12 +237,12 @@ func initUDPListener(portEnv string, defaultPort int, label string) (*net.UDPCon
 			return err
 		},
 	}
-	
+
 	conn, err := lc.ListenPacket(context.Background(), "udp", addr.String())
 	if err != nil {
 		return nil, fmt.Errorf("%s UDP port %d in use", label, addr.Port)
 	}
-	
+
 	udpConn := conn.(*net.UDPConn)
 	bufSize := 2 * 1024 * 1024
 	udpConn.SetReadBuffer(bufSize)
@@ -255,7 +254,7 @@ func initUDPListener(portEnv string, defaultPort int, label string) (*net.UDPCon
 
 func sendRtpToClient(track *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
 	defer listener.Close()
-	
+
 	buf := make([]byte, 2048)
 	var pkt rtp.Packet
 
@@ -270,8 +269,6 @@ func sendRtpToClient(track *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
 		}
 	}
 }
-
-
 
 // ---------- WebSocket handlers ----------
 
@@ -368,7 +365,7 @@ func (c *Client) writePump() {
 
 func setupPeerConnection(pc *webrtc.PeerConnection, cleanup func()) {
 	var once bool
-	
+
 	doCleanup := func(reason string) {
 		if !once {
 			once = true
@@ -380,9 +377,9 @@ func setupPeerConnection(pc *webrtc.PeerConnection, cleanup func()) {
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
 		log.Printf("Connection: %s", s.String())
 		switch s {
-		case webrtc.PeerConnectionStateFailed, 
-			 webrtc.PeerConnectionStateClosed,
-			 webrtc.PeerConnectionStateDisconnected:
+		case webrtc.PeerConnectionStateFailed,
+			webrtc.PeerConnectionStateClosed,
+			webrtc.PeerConnectionStateDisconnected:
 			doCleanup(s.String())
 		}
 	})
@@ -391,16 +388,13 @@ func setupPeerConnection(pc *webrtc.PeerConnection, cleanup func()) {
 		log.Printf("ICE: %s", s.String())
 		switch s {
 		case webrtc.ICEConnectionStateFailed,
-			 webrtc.ICEConnectionStateClosed,
-			 webrtc.ICEConnectionStateDisconnected:
+			webrtc.ICEConnectionStateClosed,
+			webrtc.ICEConnectionStateDisconnected:
 			doCleanup(s.String())
 		}
 	})
 
-
 }
-
-
 
 // ---------- HTTP server ----------
 
@@ -421,7 +415,7 @@ func main() {
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		log.Printf("Stream request received")
-		
+
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -448,12 +442,12 @@ func main() {
 
 		// localhost/내부망 접속 감지
 		host := r.Host
-		isLocalhost := strings.Contains(host, "localhost") || 
-					   strings.Contains(host, "127.0.0.1") ||
-					   strings.Contains(host, "::1") ||
-					   strings.Contains(host, "192.168.") ||
-					   strings.Contains(host, "10.") ||
-					   strings.Contains(host, "172.")
+		isLocalhost := strings.Contains(host, "localhost") ||
+			strings.Contains(host, "127.0.0.1") ||
+			strings.Contains(host, "::1") ||
+			strings.Contains(host, "192.168.") ||
+			strings.Contains(host, "10.") ||
+			strings.Contains(host, "172.")
 
 		pc, videoTrack, audioTrack, err := initWebRTCSession(&offer, isLocalhost)
 		if err != nil {
@@ -468,7 +462,7 @@ func main() {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		
+
 		audioListener, err := initUDPListener("RTP_AUDIO_PORT", 5006, "Audio")
 		if err != nil {
 			pc.Close()
@@ -530,9 +524,9 @@ func main() {
 		}
 
 		hub.broadcast <- message
-		
-		log.Printf("Received subtitle: %s [%s] %s", subtitle.LangCode, subtitle.Emoji, subtitle.Text)
-		
+
+		log.Printf("Received subtitle: %s [%s] [Speaker %d] %s", subtitle.LangCode, subtitle.Emoji, subtitle.Speaker, subtitle.Text)
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
@@ -551,16 +545,14 @@ func main() {
 
 	port := getenvInt("HTTP_PORT", 8080)
 	addr := ":" + strconv.Itoa(port)
-	
+
 	log.Printf("🚀 OMNISENSE Server starting...")
 	log.Printf("📍 Server: http://localhost:%d", port)
-	
+
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal("HTTP Server error: ", err)
 	}
 }
-
-
 
 func getSystemStatus() SystemStatus {
 	status := SystemStatus{
@@ -578,26 +570,26 @@ func getBatteryStatus() string {
 	if err != nil {
 		return "전원 정보 없음"
 	}
-	
+
 	var hasBattery bool
 	var hasActivePower bool
 	var batteryLevel string
 	var powerType string
-	
+
 	for _, entry := range entries {
 		path := powerSupplyDir + "/" + entry.Name()
-		
+
 		// 타입 확인
 		if typeData, err := ioutil.ReadFile(path + "/type"); err == nil {
 			typeStr := strings.TrimSpace(string(typeData))
-			
+
 			if typeStr == "USB" {
 				// USB-C PD 전원 확인 - voltage_now와 current_now로 실제 전력 공급 확인
 				if voltageData, err := ioutil.ReadFile(path + "/voltage_now"); err == nil {
 					if currentData, err2 := ioutil.ReadFile(path + "/current_now"); err2 == nil {
 						voltage := strings.TrimSpace(string(voltageData))
 						current := strings.TrimSpace(string(currentData))
-						
+
 						if voltageVal, err3 := strconv.Atoi(voltage); err3 == nil && voltageVal > 1000000 { // 1V 이상
 							hasActivePower = true
 							powerType = "USB-C 전원"
@@ -607,7 +599,7 @@ func getBatteryStatus() string {
 						}
 					}
 				}
-				
+
 				// online 상태도 확인
 				if onlineData, err := ioutil.ReadFile(path + "/online"); err == nil {
 					if strings.TrimSpace(string(onlineData)) == "1" {
@@ -635,7 +627,7 @@ func getBatteryStatus() string {
 			}
 		}
 	}
-	
+
 	// 실제 전력 공급 여부 확인 - 시스템이 켜져 있다는 것은 전원이 공급되고 있다는 뜻
 	if !hasActivePower {
 		// 시스템이 실행 중이므로 어떤 형태로든 전력이 공급되고 있음
@@ -655,18 +647,18 @@ func getBatteryStatus() string {
 			}
 		}
 	}
-	
+
 	if hasActivePower {
 		if hasBattery && batteryLevel != "" {
 			return powerType + " (" + batteryLevel + ")"
 		}
 		return powerType
 	}
-	
+
 	if hasBattery && batteryLevel != "" {
 		return batteryLevel
 	}
-	
+
 	// 마지막 수단: 시스템이 실행 중이므로 전원 공급 중
 	return "전원 공급 중"
 }
@@ -680,9 +672,9 @@ func getNetworkStatus() string {
 			fields := strings.Fields(line)
 			if len(fields) >= 3 {
 				deviceName := fields[0]
-				deviceType := fields[1] 
+				deviceType := fields[1]
 				state := fields[2]
-				
+
 				if state == "connected" {
 					if deviceType == "ethernet" {
 						return "유선 연결"
@@ -694,7 +686,7 @@ func getNetworkStatus() string {
 			}
 		}
 	}
-	
+
 	// 백업: /sys/class/net 디렉토리 확인
 	netDir := "/sys/class/net"
 	if entries, err := os.ReadDir(netDir); err == nil {
@@ -703,7 +695,7 @@ func getNetworkStatus() string {
 			if ifaceName == "lo" {
 				continue
 			}
-			
+
 			ifacePath := netDir + "/" + ifaceName
 			if operData, err := ioutil.ReadFile(ifacePath + "/operstate"); err == nil {
 				if strings.TrimSpace(string(operData)) == "up" {
@@ -715,7 +707,7 @@ func getNetworkStatus() string {
 							}
 						}
 					}
-					
+
 					// WiFi 연결 확인
 					if strings.HasPrefix(ifaceName, "wl") {
 						return getWiFiSignalStrengthNmcli(ifaceName)
@@ -724,7 +716,7 @@ func getNetworkStatus() string {
 			}
 		}
 	}
-	
+
 	return "연결 없음"
 }
 
@@ -769,8 +761,6 @@ func getSignalStrengthFromDbm(dbm int) string {
 	return "WiFi 약함"
 }
 
-
-
 func getCPUTemperature() string {
 	// CPU 온도 확인 (여러 경로 시도)
 	tempPaths := []string{
@@ -778,7 +768,7 @@ func getCPUTemperature() string {
 		"/sys/class/thermal/thermal_zone1/temp",
 		"/sys/devices/virtual/thermal/thermal_zone0/temp",
 	}
-	
+
 	for _, path := range tempPaths {
 		if data, err := ioutil.ReadFile(path); err == nil {
 			tempStr := strings.TrimSpace(string(data))
@@ -789,7 +779,7 @@ func getCPUTemperature() string {
 			}
 		}
 	}
-	
+
 	// sensors 명령어 시도
 	cmd := exec.Command("sensors")
 	if output, err := cmd.Output(); err == nil {
@@ -807,7 +797,7 @@ func getCPUTemperature() string {
 			}
 		}
 	}
-	
+
 	return "N/A"
 }
 
@@ -817,19 +807,16 @@ func getStorageStatus() string {
 	if err != nil {
 		return "N/A"
 	}
-	
+
 	lines := strings.Split(string(output), "\n")
 	if len(lines) >= 2 {
 		fields := strings.Fields(lines[1])
 		if len(fields) >= 4 {
-			total := fields[1]  // 전체 용량
-			avail := fields[3]  // 사용 가능 용량
+			total := fields[1] // 전체 용량
+			avail := fields[3] // 사용 가능 용량
 			return fmt.Sprintf("%s Free / %s", avail, total)
 		}
 	}
-	
+
 	return "N/A"
 }
-
-
-
