@@ -3,17 +3,17 @@
 // 중요한 상태 변경 추적
 let lastImportantStatus = {};
 
-// 시스템 상태 업데이트 시작
-function startSystemStatusUpdates() {
+// 시스템 상태 업데이트 시작 - window 객체에 할당
+window.startSystemStatusUpdates = function() {
   // 즉시 한 번 업데이트
-  updateSystemStatus();
+  window.updateSystemStatus();
   
   // 10초마다 시스템 상태 업데이트
-  setInterval(updateSystemStatus, 10000);
+  setInterval(window.updateSystemStatus, 10000);
 }
 
-// 시스템 상태 업데이트
-async function updateSystemStatus() {
+// 시스템 상태 업데이트 - window 객체에 할당
+window.updateSystemStatus = async function() {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -176,13 +176,13 @@ function announceImportantStatusChanges(status) {
   if (status.signal && status.signal !== lastImportantStatus.signal) {
     const signalStr = status.signal.toLowerCase();
     if (signalStr.includes('없음') || signalStr.includes('n/a')) {
-      if (typeof announceToScreenReader === 'function') {
-        announceToScreenReader('네트워크 신호가 없습니다.');
+      if (typeof window.announceToScreenReader === 'function') {
+        window.announceToScreenReader('네트워크 신호가 없습니다.');
       }
     } else if (lastImportantStatus.signal && 
                (lastImportantStatus.signal.includes('없음') || lastImportantStatus.signal.includes('n/a'))) {
-      if (typeof announceToScreenReader === 'function') {
-        announceToScreenReader('네트워크 신호가 복구되었습니다.');
+      if (typeof window.announceToScreenReader === 'function') {
+        window.announceToScreenReader('네트워크 신호가 복구되었습니다.');
       }
     }
   }
@@ -195,8 +195,8 @@ function announceImportantStatusChanges(status) {
       if (temp >= 75 && (!lastImportantStatus.temperature || 
           !lastImportantStatus.temperature.match(/(\d+)°c/i) || 
           parseInt(lastImportantStatus.temperature.match(/(\d+)°c/i)[1]) < 75)) {
-        if (typeof announceToScreenReader === 'function') {
-          announceToScreenReader('디바이스 온도가 높습니다. 주의하세요.');
+        if (typeof window.announceToScreenReader === 'function') {
+          window.announceToScreenReader('디바이스 온도가 높습니다. 주의하세요.');
         }
       }
     }
@@ -210,8 +210,8 @@ function announceImportantStatusChanges(status) {
       if (freeSpace < 5 && (!lastImportantStatus.storage || 
           !lastImportantStatus.storage.match(/(\d+(?:\.\d+)?)[gtmk]?\s*free/i) || 
           parseFloat(lastImportantStatus.storage.match(/(\d+(?:\.\d+)?)[gtmk]?\s*free/i)[1]) >= 5)) {
-        if (typeof announceToScreenReader === 'function') {
-          announceToScreenReader('저장 공간이 부족합니다.');
+        if (typeof window.announceToScreenReader === 'function') {
+          window.announceToScreenReader('저장 공간이 부족합니다.');
         }
       }
     }
@@ -224,7 +224,7 @@ function announceImportantStatusChanges(status) {
 // Export functions for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    startSystemStatusUpdates,
-    updateSystemStatus
+    startSystemStatusUpdates: window.startSystemStatusUpdates,
+    updateSystemStatus: window.updateSystemStatus
   };
 }

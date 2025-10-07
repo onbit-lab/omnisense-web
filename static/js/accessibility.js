@@ -1,7 +1,7 @@
 // 접근성 기능 관리
 
-// 접근성 기능 초기화
-function initAccessibilityFeatures() {
+// 접근성 기능 초기화 - window 객체에 할당
+window.initAccessibilityFeatures = function() {
   // 접근성 패널 토글
   const accessibilityToggle = document.getElementById('accessibilityToggle');
   const accessibilityPanel = document.getElementById('accessibilityPanel');
@@ -62,16 +62,31 @@ function initAccessibilityFeatures() {
     saveAccessibilitySetting('screenReader', this.checked);
   });
   
-  // 언어 선택 버튼 이벤트
+    // 언어 선택 버튼 이벤트
   document.querySelectorAll('.language-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       const selectedLang = this.getAttribute('data-lang');
-      if (typeof setLanguage === 'function') {
-        setLanguage(selectedLang);
+      if (typeof window.setLanguage === 'function') {
+        window.setLanguage(selectedLang);
         saveAccessibilitySetting('language', selectedLang);
       }
     });
   });
+}
+
+window.announceToScreenReader = function(message) {
+  const announcement = document.createElement('div');
+  announcement.setAttribute('aria-live', 'polite');
+  announcement.setAttribute('aria-atomic', 'true');
+  announcement.className = 'sr-only';
+  announcement.textContent = message;
+  
+  document.body.appendChild(announcement);
+  
+  // 메시지 후 제거
+  setTimeout(() => {
+    document.body.removeChild(announcement);
+  }, 1000);
 }
 
 function openAccessibilityPanel() {
@@ -111,8 +126,8 @@ function applyReducedMotion(enabled) {
 
 function applyScreenReaderMode(enabled) {
   document.body.classList.toggle('screen-reader-mode', enabled);
-  if (enabled) {
-    announceToScreenReader('스크린 리더 모드가 활성화되었습니다.');
+  if (enabled && typeof window.announceToScreenReader === 'function') {
+    window.announceToScreenReader('스크린 리더 모드가 활성화되었습니다.');
   }
 }
 
@@ -159,15 +174,15 @@ function loadAccessibilitySettings() {
   // 언어 설정
   const language = JSON.parse(localStorage.getItem('accessibility_language') || '"ko"');
   // 초기 언어 설정 (중복 호출 방지를 위해 직접 설정)
-  if (typeof setLanguage === 'function') {
-    setLanguage(language);
+  if (typeof window.setLanguage === 'function') {
+    window.setLanguage(language);
   }
 }
 
 // Export functions for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    initAccessibilityFeatures,
-    announceToScreenReader
+    initAccessibilityFeatures: window.initAccessibilityFeatures,
+    announceToScreenReader: window.announceToScreenReader
   };
 }

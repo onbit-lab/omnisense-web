@@ -1,11 +1,11 @@
 // WebRTC 스트리밍 관리
 
-// 전역 변수
-let pc;
-let isStreaming = false;
+// 전역 변수 - window 객체에 직접 할당
+window.pc = null;
+window.isStreaming = false;
 
-// 로깅 함수
-let log = msg => {
+// 로깅 함수 - window 객체에 할당하여 전역에서 접근 가능
+window.log = msg => {
   const timestamp = new Date().toLocaleTimeString();
   const logsElement = document.getElementById('logs');
   if (logsElement) {
@@ -14,8 +14,8 @@ let log = msg => {
   }
 }
 
-// PeerConnection 초기화 함수
-function initializePeerConnection() {
+// PeerConnection 초기화 함수 - window 객체에 할당
+window.initializePeerConnection = function() {
   // localhost 접속 감지 (더 정확한 감지)
   const hostname = window.location.hostname;
   const isLocalhost = hostname === 'localhost' || 
@@ -67,8 +67,8 @@ function initializePeerConnection() {
     if (newPc.iceConnectionState === 'connected') {
       log('WebRTC connection established successfully');
       updateStreamStatus('스트리밍 연결 완료');
-      if (typeof announceToScreenReader === 'function') {
-        announceToScreenReader('스트리밍이 성공적으로 연결되었습니다');
+      if (typeof window.announceToScreenReader === 'function') {
+        window.announceToScreenReader('스트리밍이 성공적으로 연결되었습니다');
       }
       // 연결 통계 로깅 시작
       logConnectionStats();
@@ -123,9 +123,9 @@ function initializePeerConnection() {
   return newPc;
 }
 
-// WebRTC 연결 정리를 위한 함수
-function cleanupWebRTC() {
-  if (!pc) return;
+// WebRTC 연결 정리를 위한 함수 - window 객체에 할당
+window.cleanupWebRTC = function() {
+  if (!window.pc) return;
   
   try {
     log('즉시 WebRTC 연결 정리 시작...');
@@ -146,17 +146,17 @@ function cleanupWebRTC() {
     });
     
     // 모든 이벤트 리스너 제거
-    pc.oniceconnectionstatechange = null;
-    pc.ontrack = null;
-    pc.onicecandidate = null;
-    pc.onconnectionstatechange = null;
-    pc.ondatachannel = null;
-    pc.onicegatheringstatechange = null;
-    pc.onsignalingstatechange = null;
+    window.pc.oniceconnectionstatechange = null;
+    window.pc.ontrack = null;
+    window.pc.onicecandidate = null;
+    window.pc.onconnectionstatechange = null;
+    window.pc.ondatachannel = null;
+    window.pc.onicegatheringstatechange = null;
+    window.pc.onsignalingstatechange = null;
     
     // 연결 즉시 종료
-    pc.close();
-    pc = null;
+    window.pc.close();
+    window.pc = null;
     
     // 비디오 엘리먼트 정리
     const videoPlayer = document.getElementById('remoteVideo');
@@ -189,12 +189,12 @@ function cleanupWebRTC() {
     }).catch(e => console.log('Reset request sent:', e));
     
     // 상태 초기화
-    isStreaming = false;
-    if (typeof updateUIForStreamingState === 'function') {
-      updateUIForStreamingState(false);
+    window.isStreaming = false;
+    if (typeof window.updateUIForStreamingState === 'function') {
+      window.updateUIForStreamingState(false);
     }
     
-    log('WebRTC 연결과 포트가 즉시 정리되었습니다');
+    window.log('WebRTC 연결과 포트가 즉시 정리되었습니다');
   } catch (e) {
     console.error('Error cleaning up WebRTC:', e);
     // 에러가 발생해도 서버 리셋은 시도
@@ -202,19 +202,26 @@ function cleanupWebRTC() {
   }
 }
 
-// 스트리밍 시작 함수
-function startStreaming() {
-  log('Initiating streaming connection...');
-  if (typeof announceToScreenReader === 'function') {
-    announceToScreenReader('스트리밍 연결을 시작합니다');
+// 스트리밍 시작 함수 - window 객체에 할당
+window.startStreaming = function() {
+  window.log('Initiating streaming connection...');
+  
+  // 스트리밍 상태 활성화 및 UI 업데이트
+  window.isStreaming = true;
+  if (typeof window.updateUIForStreamingState === 'function') {
+    window.updateUIForStreamingState(true);
+  }
+  
+  if (typeof window.announceToScreenReader === 'function') {
+    window.announceToScreenReader('스트리밍 연결을 시작합니다');
   }
   
   // ICE 후보 수집이 완료될 때까지 대기
-  if (pc.iceGatheringState === 'gathering') {
-    log('Waiting for ICE gathering to complete...');
-    pc.addEventListener('icegatheringstatechange', function handler() {
-      if (pc.iceGatheringState === 'complete') {
-        pc.removeEventListener('icegatheringstatechange', handler);
+  if (window.pc.iceGatheringState === 'gathering') {
+    window.log('Waiting for ICE gathering to complete...');
+    window.pc.addEventListener('icegatheringstatechange', function handler() {
+      if (window.pc.iceGatheringState === 'complete') {
+        window.pc.removeEventListener('icegatheringstatechange', handler);
         sendOfferToServer();
       }
     });
@@ -226,8 +233,8 @@ function startStreaming() {
 function sendOfferToServer() {
   fetch('/post', {
       method: 'POST',
-      // 현재 pc.localDescription을 사용
-      body: btoa(JSON.stringify(pc.localDescription))
+      // 현재 window.pc.localDescription을 사용
+      body: btoa(JSON.stringify(window.pc.localDescription))
   })
   .then(response => {
     if (!response.ok) {
@@ -238,15 +245,15 @@ function sendOfferToServer() {
     return response.text();
   })
   .then(data => {
-    log('Received response from server');
+    window.log('Received response from server');
     try {
-      pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(data))));
+      window.pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(data))));
     } catch (err) {
       throw new Error(`Failed to set remote description: ${err.message}`);
     }
   })
   .then(() => {
-    log('Remote description set successfully');
+    window.log('Remote description set successfully');
     // 연결 상태 모니터링 시작
     monitorConnectionHealth();
   })
@@ -264,32 +271,32 @@ function sendOfferToServer() {
     
     // 에러 표시 및 로깅
     showErrorMessage(errorMsg);
-    log(`Error: ${error.message}`);
-    if (typeof announceToScreenReader === 'function') {
-      announceToScreenReader(`오류가 발생했습니다: ${errorMsg}`);
+    window.log(`Error: ${error.message}`);
+    if (typeof window.announceToScreenReader === 'function') {
+      window.announceToScreenReader(`오류가 발생했습니다: ${errorMsg}`);
     }
     console.error('Error:', error);
     
     // UI 상태 초기화
-    if (typeof updateUIForStreamingState === 'function') {
-      updateUIForStreamingState(false);
+    if (typeof window.updateUIForStreamingState === 'function') {
+      window.updateUIForStreamingState(false);
     }
   });
 }
 
 // 연결 통계 로깅
 function logConnectionStats() {
-  if (!pc) return;
+  if (!window.pc) return;
   
-  pc.getStats().then(stats => {
+  window.pc.getStats().then(stats => {
     stats.forEach((report) => {
       if (report.type === 'inbound-rtp' && report.kind === 'video') {
-        log(`Video: ${report.framesPerSecond || 0} fps, ` +
+        window.log(`Video: ${report.framesPerSecond || 0} fps, ` +
             `${report.bytesReceived || 0} bytes received, ` +
             `${report.packetsLost || 0} packets lost`);
       }
       if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-        log(`Connection: ${report.localCandidateId} -> ${report.remoteCandidateId}, ` +
+        window.log(`Connection: ${report.localCandidateId} -> ${report.remoteCandidateId}, ` +
             `RTT: ${report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) : 'N/A'}ms`);
       }
     });
@@ -298,10 +305,10 @@ function logConnectionStats() {
 
 // 연결 실패 원인 분석
 async function analyzeConnectionFailure() {
-  if (!pc) return '알 수 없는 오류';
+  if (!window.pc) return '알 수 없는 오류';
   
   try {
-    const stats = await pc.getStats();
+    const stats = await window.pc.getStats();
     let hasHostCandidate = false;
     let hasServerReflexive = false;
     let failedPairs = 0;
@@ -335,13 +342,13 @@ function monitorConnectionHealth() {
   const checkInterval = isLocalNetwork ? 5000 : 10000; // 내부망에서는 더 자주 체크
   
   const healthCheckInterval = setInterval(() => {
-    if (!pc || pc.connectionState === 'closed') {
+    if (!window.pc || window.pc.connectionState === 'closed') {
       clearInterval(healthCheckInterval);
       return;
     }
     
     // 연결 통계 확인
-    pc.getStats().then(stats => {
+    window.pc.getStats().then(stats => {
       let hasActiveConnection = false;
       let packetsReceived = 0;
       let lastPacketsReceived = 0;
@@ -357,7 +364,7 @@ function monitorConnectionHealth() {
       
       // 연결은 있지만 패킷을 받지 못하는 경우
       if (hasActiveConnection && packetsReceived === lastPacketsReceived && packetsReceived > 0) {
-        log('Warning: Connection is active but no new packets received');
+        window.log('Warning: Connection is active but no new packets received');
       }
       
       lastPacketsReceived = packetsReceived;
@@ -365,16 +372,16 @@ function monitorConnectionHealth() {
   }, checkInterval);
 }
 
-function updateStreamStatus(message) {
+window.updateStreamStatus = function(message) {
   const statusElement = document.getElementById('stream-status');
   if (statusElement) {
     statusElement.textContent = message;
   }
 }
 
-function showErrorMessage(message) {
-  log('ERROR: ' + message);
-  updateStreamStatus(message);
+window.showErrorMessage = function(message) {
+  window.log('ERROR: ' + message);
+  window.updateStreamStatus(message);
   
   const existingError = document.querySelector('.error-message');
   if (existingError) existingError.remove();
@@ -391,8 +398,8 @@ function showErrorMessage(message) {
     }, 5000);
   }
   
-  if (typeof announceToScreenReader === 'function') {
-    announceToScreenReader(message);
+  if (typeof window.announceToScreenReader === 'function') {
+    window.announceToScreenReader(message);
   }
 }
 

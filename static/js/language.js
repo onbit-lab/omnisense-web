@@ -1,9 +1,9 @@
 // 언어 시스템 관리
-// 현재 언어 상태 저장
-let currentLanguage = 'ko';
+// 현재 언어 상태 저장 - window 객체에 할당
+window.currentLanguage = 'ko';
 
-// 언어 설정 객체
-const translations = {
+// 언어 설정 객체 - window 객체에 할당
+window.translations = {
   ko: {
     // 네비게이션
     'Streaming': '스트리밍',
@@ -133,31 +133,31 @@ const translations = {
   }
 };
 
-// 언어 시스템 초기화
-function initializeLanguageSystem() {
+// 언어 시스템 초기화 - window 객체에 할당
+window.initializeLanguageSystem = function() {
   // localStorage에서 저장된 언어 설정 로드
   const savedLanguage = JSON.parse(localStorage.getItem('accessibility_language') || '"ko"');
-  currentLanguage = savedLanguage;
+  window.currentLanguage = savedLanguage;
   
   // 초기 언어 적용 (DOM이 준비되기 전이므로 간단히)
   document.documentElement.lang = savedLanguage === 'ko' ? 'ko' : 'en';
 }
 
-// 언어 설정 함수
-function setLanguage(lang) {
+// 언어 설정 함수 - window 객체에 할당
+window.setLanguage = function(lang) {
   // 유효한 언어인지 확인
-  if (!translations[lang]) {
+  if (!window.translations[lang]) {
     console.warn(`Language ${lang} not supported, using Korean as fallback`);
     lang = 'ko';
   }
   
-  currentLanguage = lang;
+  window.currentLanguage = lang;
   
   const elements = document.querySelectorAll('[data-translate]');
   elements.forEach(element => {
     const key = element.getAttribute('data-translate');
-    if (translations[lang] && translations[lang][key]) {
-      element.textContent = translations[lang][key];
+    if (window.translations[lang] && window.translations[lang][key]) {
+      element.textContent = window.translations[lang][key];
     } else {
       console.warn(`Translation not found for key: ${key} in language: ${lang}`);
     }
@@ -176,8 +176,8 @@ function setLanguage(lang) {
   localStorage.setItem('accessibility_language', JSON.stringify(lang));
 }
 
-function getCurrentLanguage() {
-  return currentLanguage;
+window.getCurrentLanguage = function() {
+  return window.currentLanguage;
 }
 
 function updateLanguageButtonStates(lang) {
@@ -191,24 +191,24 @@ function updateLanguageButtonStates(lang) {
 function updateSpecialElements(lang) {
   // 버튼 텍스트 업데이트
   const streamBtn = document.getElementById('viewCamera');
-  if (streamBtn && typeof updateUIForStreamingState === 'function') {
+  if (streamBtn && typeof window.updateUIForStreamingState === 'function') {
     // 현재 스트리밍 상태에 맞게 UI 업데이트
-    updateUIForStreamingState(window.isStreaming || false);
+    window.updateUIForStreamingState(window.isStreaming || false);
   }
   
   // 접근성 패널 닫기 버튼
   const closeBtn = document.querySelector('.close-accessibility');
   if (closeBtn) {
-    closeBtn.textContent = translations[lang]['닫기'];
+    closeBtn.textContent = window.translations[lang]['닫기'];
   }
 }
 
 // Export functions for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    initializeLanguageSystem,
-    setLanguage,
-    getCurrentLanguage,
-    translations
+    initializeLanguageSystem: window.initializeLanguageSystem,
+    setLanguage: window.setLanguage,
+    getCurrentLanguage: window.getCurrentLanguage,
+    translations: window.translations
   };
 }

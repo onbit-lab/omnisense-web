@@ -1,26 +1,25 @@
 // 메인 진입점 - 모든 모듈 통합 및 초기화
 
-// 전역 변수
-window.isStreaming = false;
+// 전역 변수 초기화 (이미 다른 파일에서 초기화됨)
 let deferredPrompt;
 
 // 페이지 로드 시 초기화
 window.addEventListener('load', function() {
-  initializeLanguageSystem();
-  initAccessibilityFeatures();
-  startSystemStatusUpdates();
-  initHashNavigation();
+  window.initializeLanguageSystem();
+  window.initAccessibilityFeatures();
+  window.startSystemStatusUpdates();
+  window.initHashNavigation();
   
   // PWA 설치 프롬프트 처리
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    showInstallButton(deferredPrompt);
+    window.showInstallButton(deferredPrompt);
   });
   
   window.addEventListener('appinstalled', (evt) => {
-    if (typeof log === 'function') {
-      log('앱이 성공적으로 설치되었습니다!');
+    if (typeof window.log === 'function') {
+      window.log('앱이 성공적으로 설치되었습니다!');
     }
   });
   
@@ -41,12 +40,12 @@ window.addEventListener('load', function() {
   }, 2000);
   
   // WebSocket 연결
-  connectWebSocket();
+  window.connectWebSocket();
   
   // 페이지 종료 시 정리
   const cleanup = () => {
     if (window.isStreaming || window.pc) {
-      cleanupWebRTC();
+      window.cleanupWebRTC();
       navigator.sendBeacon('/reset', '');
     }
   };
@@ -67,13 +66,13 @@ window.addEventListener('load', function() {
 // DOM 준비 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
   // PeerConnection 초기화
-  window.pc = initializePeerConnection();
+  window.pc = window.initializePeerConnection();
   
   // 네비게이션 초기화
-  initNavigation();
+  window.initNavigation();
   
   // 비디오 품질 설정 초기화
-  initVideoQualitySettings();
+  window.initVideoQualitySettings();
   
   // 스트리밍 버튼 이벤트 리스너
   const viewCameraBtn = document.getElementById('viewCamera');
@@ -87,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {
     logsHeader.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        toggleLogs();
+        window.toggleLogs();
       }
     });
   }
@@ -100,33 +99,33 @@ function handleStreamButtonClick() {
   } else {
     // 스트리밍이 아직 활성화되지 않은 경우, 이전 세션을 정리하고 새로 초기화
     if (window.pc) {
-      cleanupWebRTC();
-      window.pc = initializePeerConnection();
+      window.cleanupWebRTC();
+      window.pc = window.initializePeerConnection();
       // 약간의 지연을 두고 연결 시작
-      setTimeout(startStreaming, 300);
+      setTimeout(window.startStreaming, 300);
     } else {
-      startStreaming();
+      window.startStreaming();
     }
   }
 }
 
 // 스트리밍 중지
 function stopStreaming() {
-  if (typeof log === 'function') {
-    log('스트리밍 즉시 중지...');
+  if (typeof window.log === 'function') {
+    window.log('스트리밍 즉시 중지...');
   }
-  if (typeof announceToScreenReader === 'function') {
-    announceToScreenReader('스트리밍을 즉시 중지합니다');
+  if (typeof window.announceToScreenReader === 'function') {
+    window.announceToScreenReader('스트리밍을 즉시 중지합니다');
   }
 
   // 상태를 즉시 변경하여 추가 요청 방지
   window.isStreaming = false;
   
   // 버튼 클릭 시 UI를 즉시 "스트리밍 시작" 상태로 업데이트
-  updateUIForStreamingState(false);
+  window.updateUIForStreamingState(false);
   
   // WebRTC 연결과 포트를 즉시 정리
-  cleanupWebRTC();
+  window.cleanupWebRTC();
   
   // 서버에 즉시 강제 리셋 요청 (POST 방식으로)
   fetch('/reset', { 
@@ -140,9 +139,9 @@ function stopStreaming() {
   navigator.sendBeacon('/reset', new Blob(['{"force":true}'], { type: 'application/json' }));
   
   // 새로운 연결을 위한 PC 객체 즉시 준비
-  window.pc = initializePeerConnection();
+  window.pc = window.initializePeerConnection();
   
-  if (typeof log === 'function') {
-    log('스트리밍이 즉시 중지되고 포트가 해제되었습니다');
+  if (typeof window.log === 'function') {
+    window.log('스트리밍이 즉시 중지되고 포트가 해제되었습니다');
   }
 }

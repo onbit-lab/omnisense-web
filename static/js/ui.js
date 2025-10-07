@@ -1,7 +1,7 @@
 // UI 업데이트 및 네비게이션 관리
 
-// UI 업데이트를 위한 중앙 함수
-function updateUIForStreamingState(streamingActive) {
+// UI 업데이트를 위한 중앙 함수 - window 객체에 할당
+window.updateUIForStreamingState = function(streamingActive) {
   window.isStreaming = streamingActive; // 전역 플래그 업데이트
 
   const btn = document.getElementById('viewCamera');
@@ -9,9 +9,9 @@ function updateUIForStreamingState(streamingActive) {
   const btnIcon = btn.querySelector('.btn-icon');
   const videoPlayer = document.getElementById('remoteVideo');
   const subtitleBox = document.getElementById('subtitleBox');
-  const currentLang = typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'ko';
+  const currentLang = typeof window.getCurrentLanguage === 'function' ? window.getCurrentLanguage() : 'ko';
 
-  // translations 객체를 사용하기 위해 전역에서 가져오기
+  // translations 객체를 사용
   const translations = window.translations || {
     ko: { 'Stop Stream': '스트리밍 중지', 'Start Stream': '스트리밍 시작', 'Click "Start Stream" to begin live broadcast': '"스트리밍 시작"을 클릭하여 실시간 방송을 시작하세요' },
     en: { 'Stop Stream': 'Stop Stream', 'Start Stream': 'Start Stream', 'Click "Start Stream" to begin live broadcast': 'Click "Start Stream" to begin live broadcast' }
@@ -23,8 +23,8 @@ function updateUIForStreamingState(streamingActive) {
     btnIcon.innerHTML = '⏹';
     btn.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
     btn.setAttribute('aria-label', '스트리밍 중지');
-    if (typeof updateStreamStatus === 'function') {
-      updateStreamStatus('스트리밍이 활성화되었습니다');
+    if (typeof window.updateStreamStatus === 'function') {
+      window.updateStreamStatus('스트리밍이 활성화되었습니다');
     }
     
     // 자막 오버레이 준비 (내용은 나중에 표시됨)
@@ -37,8 +37,8 @@ function updateUIForStreamingState(streamingActive) {
     btnIcon.innerHTML = '▶';
     btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
     btn.setAttribute('aria-label', '스트리밍 시작');
-    if (typeof updateStreamStatus === 'function') {
-      updateStreamStatus('스트리밍이 비활성화되었습니다');
+    if (typeof window.updateStreamStatus === 'function') {
+      window.updateStreamStatus('스트리밍이 비활성화되었습니다');
     }
     
     // 스트리밍 중지 시 자막 오버레이 숨기기
@@ -51,8 +51,8 @@ function updateUIForStreamingState(streamingActive) {
   }
 }
 
-// 비디오 품질 설정 관리
-function initVideoQualitySettings() {
+// 비디오 품질 설정 관리 - window 객체에 할당
+window.initVideoQualitySettings = function() {
   const videoQualitySelect = document.getElementById('videoQuality');
   const streamQualityDisplay = document.querySelector('.stream-quality');
   
@@ -71,12 +71,12 @@ function initVideoQualitySettings() {
     
     // 스크린 리더에 변경 알림
     const qualityText = getQualityDisplayText(selectedQuality);
-    if (typeof announceToScreenReader === 'function') {
-      announceToScreenReader(`비디오 품질이 ${qualityText}로 변경되었습니다.`);
+    if (typeof window.announceToScreenReader === 'function') {
+      window.announceToScreenReader(`비디오 품질이 ${qualityText}로 변경되었습니다.`);
     }
     
-    if (typeof log === 'function') {
-      log(`Video quality changed to: ${qualityText}`);
+    if (typeof window.log === 'function') {
+      window.log(`Video quality changed to: ${qualityText}`);
     }
   });
   
@@ -123,8 +123,8 @@ function getShortQualityText(quality) {
   return shortQualityMap[quality] || 'HD';
 }
 
-// Stream Console 토글 기능
-function toggleLogs() {
+// Stream Console 토글 기능 - window 객체에 할당
+window.toggleLogs = function() {
   const logsContent = document.getElementById('logs');
   const logsHeader = document.querySelector('.logs-header');
   const logsArrow = document.querySelector('.logs-arrow');
@@ -139,8 +139,8 @@ function toggleLogs() {
     logsArrow.classList.remove('collapsed');
     logsArrow.textContent = '▼';
     logsHeader.setAttribute('aria-expanded', 'true');
-    if (typeof announceToScreenReader === 'function') {
-      announceToScreenReader('스트림 콘솔이 펼쳐졌습니다');
+    if (typeof window.announceToScreenReader === 'function') {
+      window.announceToScreenReader('스트림 콘솔이 펼쳐졌습니다');
     }
   } else {
     // 접기
@@ -148,14 +148,14 @@ function toggleLogs() {
     logsArrow.classList.add('collapsed');
     logsArrow.textContent = '▶';
     logsHeader.setAttribute('aria-expanded', 'false');
-    if (typeof announceToScreenReader === 'function') {
-      announceToScreenReader('스트림 콘솔이 접혔습니다');
+    if (typeof window.announceToScreenReader === 'function') {
+      window.announceToScreenReader('스트림 콘솔이 접혔습니다');
     }
   }
 }
 
-// 네비게이션 초기화
-function initNavigation() {
+// 네비게이션 초기화 - window 객체에 할당
+window.initNavigation = function() {
   // Navigation toggle for mobile
   const navToggle = document.getElementById('navToggle');
   const navMenu = document.getElementById('navMenu');
@@ -201,8 +201,8 @@ function initNavigation() {
       window.location.hash = targetSection;
       
       // 상태 탭인 경우 시스템 상태 업데이트
-      if (targetSection === 'status' && typeof updateSystemStatus === 'function') {
-        updateSystemStatus();
+      if (targetSection === 'status' && typeof window.updateSystemStatus === 'function') {
+        window.updateSystemStatus();
       }
       
       // 모바일에서 메뉴 자동 닫기
@@ -215,8 +215,8 @@ function initNavigation() {
       }
       
       // 스크린 리더에 알림
-      if (typeof announceToScreenReader === 'function') {
-        announceToScreenReader(`${this.textContent} 섹션으로 이동했습니다.`);
+      if (typeof window.announceToScreenReader === 'function') {
+        window.announceToScreenReader(`${this.textContent} 섹션으로 이동했습니다.`);
       }
     });
   });
@@ -235,8 +235,8 @@ function initNavigation() {
   });
 }
 
-// 해시 네비게이션 초기화
-function initHashNavigation() {
+// 해시 네비게이션 초기화 - window 객체에 할당
+window.initHashNavigation = function() {
   // 페이지 로드 시 해시 확인
   handleHashChange();
   
@@ -274,19 +274,19 @@ function navigateToSection(sectionName) {
     targetSection.classList.add('active');
     
     // 상태 탭인 경우 시스템 상태 업데이트
-    if (sectionName === 'status' && typeof updateSystemStatus === 'function') {
-      updateSystemStatus();
+    if (sectionName === 'status' && typeof window.updateSystemStatus === 'function') {
+      window.updateSystemStatus();
     }
     
     // 스크린 리더에 알림
-    if (typeof announceToScreenReader === 'function') {
-      announceToScreenReader(`${targetLink.textContent} 섹션으로 이동했습니다.`);
+    if (typeof window.announceToScreenReader === 'function') {
+      window.announceToScreenReader(`${targetLink.textContent} 섹션으로 이동했습니다.`);
     }
   }
 }
 
-// PWA 설치 버튼 표시 함수
-function showInstallButton(deferredPrompt) {
+// PWA 설치 버튼 표시 함수 - window 객체에 할당
+window.showInstallButton = function(deferredPrompt) {
   // 설치 버튼을 헤더에 추가 (선택사항)
   const installBtn = document.createElement('button');
   installBtn.textContent = '앱 설치';
@@ -321,11 +321,11 @@ function showInstallButton(deferredPrompt) {
 // Export functions for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    updateUIForStreamingState,
-    initVideoQualitySettings,
-    toggleLogs,
-    initNavigation,
-    initHashNavigation,
-    showInstallButton
+    updateUIForStreamingState: window.updateUIForStreamingState,
+    initVideoQualitySettings: window.initVideoQualitySettings,
+    toggleLogs: window.toggleLogs,
+    initNavigation: window.initNavigation,
+    initHashNavigation: window.initHashNavigation,
+    showInstallButton: window.showInstallButton
   };
 }
