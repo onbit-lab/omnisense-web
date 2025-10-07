@@ -1,0 +1,133 @@
+/* Navigation styles */
+
+/* Main Navigation */
+.main-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 1000;
+    transition: transform 0.3s ease;
+}
+
+.main-nav.hidden {
+    transform: translateY(-100%);
+}
+
+.nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 60px;
+}
+
+.nav-brand {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #00d4ff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-logo {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.brand-logo:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.brand-logo-img {
+    width: 120px;
+    height: 40px;
+    object-fit: contain;
+}
+
+.nav-menu {
+    display: flex;
+    gap: 30px;
+    align-items: center;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.nav-link:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-link.active {
+    color: #00d4ff;
+    background: rgba(0, 212, 255, 0.1);
+}
+
+/* Ensure proper focus management for navigation */
+.nav-link:focus {
+    outline: 2px solid #00d4ff;
+    outline-offset: 2px;
+}
+
+.nav-icon {
+    font-size: 16px;
+}
+
+/* Font Awesome 아이콘 스타일 */
+.nav-icon .fas,
+.status-icon .fas,
+.accessibility-icon .fas,
+.btn-icon .fas {
+    font-size: 1em;
+    color: inherit;
+    vertical-align: middle;
+}
+
+/* 상태 아이콘 특별 스타일 */
+.status-icon .fas {
+    font-size: 2rem;
+}
+
+.nav-toggle {
+    display: none;
+    flex-direction: column;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    gap: 3px;
+}
+
+.nav-toggle:focus {
+    outline: 2px solid #00d4ff;
+    outline-offset: 2px;
+}
+
+.hamburger-line {
+    width: 20px;
+    height: 2px;
+    background: #ffffff;
+    transition: all 0.3s ease;
+}
