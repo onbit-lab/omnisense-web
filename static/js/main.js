@@ -19,7 +19,7 @@ window.addEventListener('load', function() {
   
   window.addEventListener('appinstalled', (evt) => {
     if (typeof window.log === 'function') {
-      window.log('앱이 성공적으로 설치되었습니다!');
+      window.log(window.t('msg_app_installed'));
     }
   });
   
@@ -112,10 +112,10 @@ function handleStreamButtonClick() {
 // 스트리밍 중지
 function stopStreaming() {
   if (typeof window.log === 'function') {
-    window.log('스트리밍 즉시 중지...');
+    window.log(window.t('msg_streaming_stop'));
   }
   if (typeof window.announceToScreenReader === 'function') {
-    window.announceToScreenReader('스트리밍을 즉시 중지합니다');
+    window.announceToScreenReader(window.t('msg_streaming_stop'));
   }
 
   // 상태를 즉시 변경하여 추가 요청 방지

@@ -127,7 +127,7 @@ function applyReducedMotion(enabled) {
 function applyScreenReaderMode(enabled) {
   document.body.classList.toggle('screen-reader-mode', enabled);
   if (enabled && typeof window.announceToScreenReader === 'function') {
-    window.announceToScreenReader('스크린 리더 모드가 활성화되었습니다.');
+    window.announceToScreenReader(window.t('msg_a11y_screen_reader_on'));
   }
 }
 

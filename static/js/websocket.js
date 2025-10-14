@@ -18,7 +18,7 @@ window.connectWebSocket = function() {
       window.log('WebSocket connected for subtitles');
     }
     if (typeof window.announceToScreenReader === 'function') {
-      window.announceToScreenReader('자막 서비스가 연결되었습니다');
+      window.announceToScreenReader(window.t('msg_subtitle_connected'));
     }
     wsReconnectAttempts = 0; // 연결 성공 시 재연결 시도 횟수 리셋
   };
@@ -102,7 +102,7 @@ function updateSubtitleOverlay(subtitleData) {
   
   // 스크린 리더에 자막 알림
   if (subtitleData.is_final && typeof window.announceToScreenReader === 'function') {
-    window.announceToScreenReader(`자막: ${subtitleData.text}`);
+    window.announceToScreenReader(`${window.t('msg_subtitle_prefix')}: ${subtitleData.text}`);
   }
 }
 

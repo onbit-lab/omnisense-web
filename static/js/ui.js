@@ -9,22 +9,15 @@ window.updateUIForStreamingState = function(streamingActive) {
   const btnIcon = btn.querySelector('.btn-icon');
   const videoPlayer = document.getElementById('remoteVideo');
   const subtitleBox = document.getElementById('subtitleBox');
-  const currentLang = typeof window.getCurrentLanguage === 'function' ? window.getCurrentLanguage() : 'ko';
-
-  // translations 객체를 사용
-  const translations = window.translations || {
-    ko: { 'Stop Stream': '스트리밍 중지', 'Start Stream': '스트리밍 시작', 'Click "Start Stream" to begin live broadcast': '"스트리밍 시작"을 클릭하여 실시간 방송을 시작하세요' },
-    en: { 'Stop Stream': 'Stop Stream', 'Start Stream': 'Start Stream', 'Click "Start Stream" to begin live broadcast': 'Click "Start Stream" to begin live broadcast' }
-  };
 
   if (streamingActive) {
     // 스트리밍 활성화 상태 UI
-    btnText.textContent = translations[currentLang]['Stop Stream'] || 'Stop Stream';
+    btnText.textContent = window.t('ctl_stop_stream');
     btnIcon.innerHTML = '⏹';
     btn.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
-    btn.setAttribute('aria-label', '스트리밍 중지');
+    btn.setAttribute('aria-label', window.t('ctl_stop_stream'));
     if (typeof window.updateStreamStatus === 'function') {
-      window.updateStreamStatus('스트리밍이 활성화되었습니다');
+      window.updateStreamStatus(window.t('msg_streaming_active'));
     }
     
     // 자막 오버레이 준비 (내용은 나중에 표시됨)
@@ -33,12 +26,12 @@ window.updateUIForStreamingState = function(streamingActive) {
     }
   } else {
     // 스트리밍 비활성화 상태 UI
-    btnText.textContent = translations[currentLang]['Start Stream'] || 'Start Stream';
+    btnText.textContent = window.t('ctl_start_stream');
     btnIcon.innerHTML = '▶';
     btn.style.background = 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)';
-    btn.setAttribute('aria-label', '스트리밍 시작');
+    btn.setAttribute('aria-label', window.t('ctl_start_stream'));
     if (typeof window.updateStreamStatus === 'function') {
-      window.updateStreamStatus('스트리밍이 비활성화되었습니다');
+      window.updateStreamStatus(window.t('msg_streaming_inactive'));
     }
     
     // 스트리밍 중지 시 자막 오버레이 숨기기
@@ -47,7 +40,7 @@ window.updateUIForStreamingState = function(streamingActive) {
     }
 
     // 비디오 플레이어를 초기 placeholder 상태로 되돌림
-    videoPlayer.innerHTML = `<div class="video-placeholder"><p data-translate="Click "Start Stream" to begin live broadcast">${translations[currentLang]['Click "Start Stream" to begin live broadcast']}</p></div>`;
+    videoPlayer.innerHTML = `<div class="video-placeholder"><p data-i18n="msg_start_prompt">${window.t('msg_start_prompt')}</p></div>`;
   }
 }
 
@@ -72,7 +65,7 @@ window.initVideoQualitySettings = function() {
     // 스크린 리더에 변경 알림
     const qualityText = getQualityDisplayText(selectedQuality);
     if (typeof window.announceToScreenReader === 'function') {
-      window.announceToScreenReader(`비디오 품질이 ${qualityText}로 변경되었습니다.`);
+      window.announceToScreenReader(window.t('msg_quality_changed', { quality: qualityText }));
     }
     
     if (typeof window.log === 'function') {
@@ -140,7 +133,7 @@ window.toggleLogs = function() {
     logsArrow.textContent = '▼';
     logsHeader.setAttribute('aria-expanded', 'true');
     if (typeof window.announceToScreenReader === 'function') {
-      window.announceToScreenReader('스트림 콘솔이 펼쳐졌습니다');
+      window.announceToScreenReader(window.t('msg_console_expanded'));
     }
   } else {
     // 접기
@@ -149,7 +142,7 @@ window.toggleLogs = function() {
     logsArrow.textContent = '▶';
     logsHeader.setAttribute('aria-expanded', 'false');
     if (typeof window.announceToScreenReader === 'function') {
-      window.announceToScreenReader('스트림 콘솔이 접혔습니다');
+      window.announceToScreenReader(window.t('msg_console_collapsed'));
     }
   }
 }
@@ -216,7 +209,7 @@ window.initNavigation = function() {
       
       // 스크린 리더에 알림
       if (typeof window.announceToScreenReader === 'function') {
-        window.announceToScreenReader(`${this.textContent} 섹션으로 이동했습니다.`);
+        window.announceToScreenReader(window.t('msg_section_navigated', { section: this.textContent }));
       }
     });
   });
@@ -280,7 +273,7 @@ function navigateToSection(sectionName) {
     
     // 스크린 리더에 알림
     if (typeof window.announceToScreenReader === 'function') {
-      window.announceToScreenReader(`${targetLink.textContent} 섹션으로 이동했습니다.`);
+      window.announceToScreenReader(window.t('msg_section_navigated', { section: targetLink.textContent }));
     }
   }
 }

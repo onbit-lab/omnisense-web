@@ -66,18 +66,18 @@ window.initializePeerConnection = function() {
     // 연결 상태에 따라 UI 업데이트 함수 호출
     if (newPc.iceConnectionState === 'connected') {
       log('WebRTC connection established successfully');
-      updateStreamStatus('스트리밍 연결 완료');
+      updateStreamStatus(window.t('msg_streaming_complete'));
       if (typeof window.announceToScreenReader === 'function') {
-        window.announceToScreenReader('스트리밍이 성공적으로 연결되었습니다');
+        window.announceToScreenReader(window.t('msg_streaming_connected'));
       }
       // 연결 통계 로깅 시작
       logConnectionStats();
     } else if (newPc.iceConnectionState === 'disconnected') {
       log('WebRTC connection disconnected');
-      updateStreamStatus('스트리밍 연결 끊김');
+      updateStreamStatus(window.t('msg_streaming_disconnected'));
     } else if (newPc.iceConnectionState === 'failed') {
       log('WebRTC connection failed');
-      updateStreamStatus('스트리밍 연결 실패');
+      updateStreamStatus(window.t('msg_streaming_failed'));
       
       // 실패 원인 분석
       analyzeConnectionFailure().then(reason => {
@@ -86,7 +86,7 @@ window.initializePeerConnection = function() {
       });
     } else if (newPc.iceConnectionState === 'checking') {
       log('Checking ICE connection...');
-      updateStreamStatus('스트리밍 연결 중...');
+      updateStreamStatus(window.t('msg_streaming_checking'));
     }
   };
   
@@ -213,7 +213,7 @@ window.startStreaming = function() {
   }
   
   if (typeof window.announceToScreenReader === 'function') {
-    window.announceToScreenReader('스트리밍 연결을 시작합니다');
+    window.announceToScreenReader(window.t('msg_streaming_start'));
   }
   
   // ICE 후보 수집이 완료될 때까지 대기
@@ -262,18 +262,18 @@ function sendOfferToServer() {
     
     // 특정 에러 메시지 처리
     if (error.message.includes('Stream already in progress')) {
-      errorMsg = '이미 스트리밍이 진행 중입니다. 잠시 후 다시 시도해주세요.';
+      errorMsg = window.t('msg_already_streaming');
     } else if (error.message.includes('Failed to fetch')) {
-      errorMsg = '서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.';
+      errorMsg = window.t('msg_network_error');
     } else {
-      errorMsg = `연결 오류가 발생했습니다: ${error.message}`;
+      errorMsg = `${window.t('msg_error_occurred')}: ${error.message}`;
     }
     
     // 에러 표시 및 로깅
     showErrorMessage(errorMsg);
     window.log(`Error: ${error.message}`);
     if (typeof window.announceToScreenReader === 'function') {
-      window.announceToScreenReader(`오류가 발생했습니다: ${errorMsg}`);
+      window.announceToScreenReader(`${window.t('msg_error_occurred')}: ${errorMsg}`);
     }
     console.error('Error:', error);
     
@@ -338,10 +338,8 @@ async function analyzeConnectionFailure() {
 
 // 연결 상태 건강도 모니터링
 function monitorConnectionHealth() {
-  const isLocalNetwork = window.location.hostname.match(/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\.|^localhost$|^127\./);
-  const checkInterval = isLocalNetwork ? 5000 : 10000; // 내부망에서는 더 자주 체크
-  
-  const healthCheckInterval = setInterval(() => {
+    const checkInterval = 60000;
+    const healthCheckInterval = setInterval(() => {
     if (!window.pc || window.pc.connectionState === 'closed') {
       clearInterval(healthCheckInterval);
       return;

@@ -175,14 +175,14 @@ function announceImportantStatusChanges(status) {
   // 네트워크 연결 상태 변경
   if (status.signal && status.signal !== lastImportantStatus.signal) {
     const signalStr = status.signal.toLowerCase();
-    if (signalStr.includes('없음') || signalStr.includes('n/a')) {
+    if (signalStr.includes('없음') || signalStr.includes('n/a') || signalStr.includes('none')) {
       if (typeof window.announceToScreenReader === 'function') {
-        window.announceToScreenReader('네트워크 신호가 없습니다.');
+        window.announceToScreenReader(window.t('msg_signal_lost'));
       }
     } else if (lastImportantStatus.signal && 
-               (lastImportantStatus.signal.includes('없음') || lastImportantStatus.signal.includes('n/a'))) {
+               (lastImportantStatus.signal.includes('없음') || lastImportantStatus.signal.includes('n/a') || lastImportantStatus.signal.includes('none'))) {
       if (typeof window.announceToScreenReader === 'function') {
-        window.announceToScreenReader('네트워크 신호가 복구되었습니다.');
+        window.announceToScreenReader(window.t('msg_signal_restored'));
       }
     }
   }
@@ -196,7 +196,7 @@ function announceImportantStatusChanges(status) {
           !lastImportantStatus.temperature.match(/(\d+)°c/i) || 
           parseInt(lastImportantStatus.temperature.match(/(\d+)°c/i)[1]) < 75)) {
         if (typeof window.announceToScreenReader === 'function') {
-          window.announceToScreenReader('디바이스 온도가 높습니다. 주의하세요.');
+          window.announceToScreenReader(window.t('msg_temp_high'));
         }
       }
     }
@@ -211,7 +211,7 @@ function announceImportantStatusChanges(status) {
           !lastImportantStatus.storage.match(/(\d+(?:\.\d+)?)[gtmk]?\s*free/i) || 
           parseFloat(lastImportantStatus.storage.match(/(\d+(?:\.\d+)?)[gtmk]?\s*free/i)[1]) >= 5)) {
         if (typeof window.announceToScreenReader === 'function') {
-          window.announceToScreenReader('저장 공간이 부족합니다.');
+          window.announceToScreenReader(window.t('msg_storage_low'));
         }
       }
     }
