@@ -1,0 +1,327 @@
+/* Accessibility features and utilities */
+
+/* Accessibility utilities */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Accessibility panel */
+.accessibility-panel {
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 350px;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border-left: 2px solid #00d4ff;
+    z-index: 10000;
+    transition: right 0.3s ease;
+    overflow-y: auto;
+}
+
+.accessibility-panel.open {
+    right: 0;
+}
+
+.accessibility-content {
+    padding: 20px;
+    color: #ffffff;
+}
+
+.accessibility-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.accessibility-content h2 {
+    color: #00d4ff;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+.close-accessibility-x {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 32px;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    line-height: 1;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 15px;
+    flex-shrink: 0;
+}
+
+.close-accessibility-x:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ff6666;
+    transform: scale(1.1);
+}
+
+.close-accessibility-x:focus {
+    outline: 2px solid #00d4ff;
+    outline-offset: 3px;
+}
+
+.close-accessibility-x:active {
+    transform: scale(0.95);
+}
+
+.accessibility-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.control-group label {
+    font-weight: 500;
+    color: #ffffff;
+}
+
+.accessibility-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    color: #ffffff;
+    font-size: 14px;
+}
+
+.accessibility-select:focus {
+    outline: 2px solid #00d4ff;
+    outline-offset: 2px;
+}
+
+.control-group input[type="checkbox"] {
+    margin-right: 8px;
+    transform: scale(1.2);
+}
+
+.close-accessibility {
+    background: #00d4ff;
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 20px;
+    width: 100%;
+}
+
+.close-accessibility:hover {
+    background: #0099cc;
+}
+
+.language-selector {
+    display: flex;
+    gap: 10px;
+}
+
+.language-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #ffffff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.language-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.language-btn.active {
+    background: #00d4ff;
+    color: #000;
+    border-color: #00d4ff;
+}
+
+.language-btn:focus {
+    outline: 2px solid #00d4ff;
+    outline-offset: 2px;
+}
+
+/* Floating Accessibility Button */
+.accessibility-floating {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 212, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
+    transition: all 0.3s ease;
+    z-index: 9999;
+    backdrop-filter: blur(10px);
+}
+
+.accessibility-floating:hover {
+    background: rgba(0, 212, 255, 1);
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(0, 212, 255, 0.5);
+}
+
+.accessibility-floating:focus {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
+
+.accessibility-floating .accessibility-icon {
+    font-size: 24px;
+}
+
+.accessibility-floating.hidden {
+    display: none;
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    
+    .loading-gif {
+        animation: none;
+    }
+    
+    .console-indicator {
+        animation: none;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    body {
+        background: #000000;
+        color: #ffffff;
+    }
+    
+    .nav-link {
+        border: 2px solid #ffffff;
+    }
+    
+    .stream-btn {
+        border: 3px solid #ffffff;
+    }
+    
+    .video-container {
+        border: 3px solid #ffffff;
+    }
+}
+
+/* Font size adjustments */
+body.large-text {
+    font-size: 18px;
+}
+
+body.large-text .nav-link {
+    font-size: 16px;
+}
+
+body.large-text .stream-btn {
+    font-size: 18px;
+    padding: 18px 36px;
+}
+
+body.xlarge-text {
+    font-size: 22px;
+}
+
+body.xlarge-text .nav-link {
+    font-size: 20px;
+}
+
+body.xlarge-text .stream-btn {
+    font-size: 22px;
+    padding: 22px 44px;
+}
+
+/* High contrast theme */
+body.high-contrast {
+    background: #000000;
+    color: #ffffff;
+}
+
+body.high-contrast .main-nav {
+    background: #000000;
+    border-bottom: 3px solid #ffffff;
+}
+
+body.high-contrast .nav-link {
+    border: 2px solid transparent;
+    color: #ffffff;
+}
+
+body.high-contrast .nav-link:hover,
+body.high-contrast .nav-link.active {
+    border-color: #ffffff;
+    background: #ffffff;
+    color: #000000;
+}
+
+body.high-contrast .stream-btn {
+    background: #ffffff;
+    color: #000000;
+    border: 3px solid #ffffff;
+}
+
+body.high-contrast .video-container {
+    border: 3px solid #ffffff;
+}
+
+/* Screen reader improvements */
+body.screen-reader-mode .video-placeholder::after {
+    content: "비디오 스트림이 시작되지 않았습니다. 스트림 시작 버튼을 눌러주세요.";
+    position: absolute;
+    left: -9999px;
+}
+
+body.screen-reader-mode .logs-content:empty::before {
+    content: "스트림 콘솔이 준비되었습니다. 연결을 기다리고 있습니다.";
+}

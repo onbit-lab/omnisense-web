@@ -1,0 +1,423 @@
+/* Layout and content sections */
+
+/* Loading Screen */
+.loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.5s ease-out;
+}
+
+.loading-text {
+    color: #00d4ff;
+    font-size: 18px;
+    margin-top: 20px;
+    text-align: center;
+}
+
+.loading-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.loading-gif {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation-iteration-count: 1; /* GIF 한 번만 재생 */
+}
+
+/* Main Content */
+.main-content {
+    display: none;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.main-content.show {
+    display: block;
+    padding-top: 70px; /* Account for fixed navigation */
+}
+
+/* Content Sections */
+.content-section {
+    display: none;
+    min-height: calc(100vh - 70px);
+    padding: 20px;
+}
+
+.content-section.active {
+    display: block;
+}
+
+.streaming-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-rows: auto 1fr auto auto;
+    gap: 20px;
+    min-height: calc(100vh - 40px);
+    min-height: calc(100vh - 110px); /* Account for navigation */
+}
+
+/* Header */
+.stream-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 30px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stream-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.device-info {
+    background: rgba(0, 212, 255, 0.2);
+    padding: 8px 15px;
+    border-radius: 20px;
+    border: 1px solid #00d4ff;
+    color: #00d4ff;
+    font-size: 14px;
+}
+
+/* Settings Section */
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.settings-grid {
+    display: grid;
+    gap: 25px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 30px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.setting-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.setting-group:last-child {
+    border-bottom: none;
+}
+
+.setting-label {
+    font-size: 16px;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+.setting-select {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #ffffff;
+    font-size: 14px;
+    min-width: 150px;
+}
+
+.setting-select:focus {
+    outline: 2px solid #00d4ff;
+    outline-offset: 2px;
+}
+
+.setting-select:focus {
+    outline: none;
+    border-color: #00d4ff;
+}
+
+.toggle-switch {
+    position: relative;
+}
+
+.toggle-switch input {
+    display: none;
+}
+
+.toggle-label {
+    display: block;
+    width: 50px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.toggle-label::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.toggle-label:focus-within {
+    outline: 2px solid #00d4ff;
+    outline-offset: 2px;
+}
+
+.toggle-switch input:checked + .toggle-label {
+    background: #00d4ff;
+}
+
+.toggle-switch input:checked + .toggle-label::after {
+    transform: translateX(26px);
+}
+
+/* Settings help text */
+.setting-help {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 5px;
+    font-style: italic;
+    line-height: 1.4;
+}
+
+/* Status Section */
+.status-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.status-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.status-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+/* 상태별 시각적 피드백 */
+.status-card.status-good {
+    border-color: rgba(46, 204, 113, 0.5);
+    background: rgba(46, 204, 113, 0.1);
+}
+
+.status-card.status-good .status-value {
+    color: #2ecc71;
+}
+
+.status-card.status-warning {
+    border-color: rgba(241, 196, 15, 0.5);
+    background: rgba(241, 196, 15, 0.1);
+}
+
+.status-card.status-warning .status-value {
+    color: #f1c40f;
+}
+
+.status-card.status-error {
+    border-color: rgba(231, 76, 60, 0.5);
+    background: rgba(231, 76, 60, 0.1);
+}
+
+.status-card.status-error .status-value {
+    color: #e74c3c;
+}
+
+/* 상태 업데이트 애니메이션 */
+.status-card.status-updated {
+    animation: statusPulse 1s ease-in-out;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.status-icon {
+    font-size: 2rem;
+}
+
+.status-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.status-label {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+}
+
+.status-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #00d4ff;
+}
+
+/* Help Section */
+.help-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.help-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.help-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 25px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.help-item h3 {
+    color: #00d4ff;
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.help-item p {
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.help-item ul {
+    color: rgba(255, 255, 255, 0.8);
+    padding-left: 20px;
+}
+
+.help-item li {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+/* Logs Section */
+.logs-section {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.logs-header:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.logs-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #00d4ff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.logs-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logs-arrow {
+    font-size: 12px;
+    color: #00d4ff;
+    transition: transform 0.3s ease;
+}
+
+.logs-arrow.collapsed {
+    transform: rotate(-90deg);
+}
+
+.console-indicator {
+    width: 8px;
+    height: 8px;
+    background: #00ff00;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+.logs-content {
+    max-height: 200px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 15px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #00ff00;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.logs-content.collapsed {
+    max-height: 0;
+    padding: 0 20px;
+}
+
+.logs-content:empty::before {
+    content: "Stream console ready... Waiting for connection...";
+    color: rgba(0, 255, 0, 0.6);
+    font-style: italic;
+}
